@@ -1,0 +1,67 @@
+Instruction Encoding:
+opcode, byte operand 1, byte operand 2, immediate word, extra word, flags
+
+ 
+opcode     (byte)  - The Opcode
+BOP_1      (byte)  - Byte Operand 1
+BOP_2      (byte)  - Byte Operand 2
+imm16      (word)  - 16-bit Immediate
+extra      (word)  - Extra 16-bit Operand
+flags      (byte)  - Extra flags for the opcode
+imm32      (dword) - imm16 and extra combined        *does not add extra bytes, only a combination of imm16 and extra
+ 
+
+ 
+ISA:
+ 
+halt-cpu:        Halts the cpu                            ->    [1, -, -, -, -, -]                 | No flags.
+load-imm32:      Loads a 32-bit integer into a register   ->    [2, reg, -, combined, combined, -]          | No flags.                               *Numbers can still be 8-bit and 16-bit, 32-bit is just the max                        
+ 
+indir-jmp:       Moves rIP to a new address               ->    [3, reg, -, combined, combined, mode]       | Mode: 0 = Indirect jump to imm16/extra
+                                                                                                   | Mode: 1 = Indirect jump to regs[reg]
+ 
+add:             Adds reg1 to reg2 and stores in reg1     ->    [4, reg1, reg2, imma, -, mode]     | Mode: 0 = reg1 = reg1+reg2
+                 Supports adding 16-bit immediates (imma)                                          | Mode: 1 = reg1=reg1+imm32
+(all the same with sub, div, mul (opcodes 5, 6, and 7))
+ 
+compare:         Updates rflags based on a comparison     ->    [8, reg1, reg2, combined, combined, mode]    | Mode: 0 = reg1 ==/!=/</> reg2
+                                                                                                   | Mode: 1 = reg1 ==/!=/</> imm32
+ 
+indir-jmp-eq:    Directly jumps to 32-bit address         ->    [9, reg1, reg2, combined, combined, -]      | No flags.
+                 if reg1 == reg2
+ 
+(all the same with jump-if-neq, jump-if-high, jump-if-low (opcodes 10, 11 and 12))
+                                      
+data-move:       Moves (COPIES) Data                      ->    [13, reg1, reg2, combined, combined, mode] 
+                 Moves from alot of different places
+                 (does load-dword)                                                                 
+                                                                                                   | Mode: 0 = Register           ->     memory
+                                                                                                   | Mode: 1 = Memory             ->     register
+                                                                                                   | Mode: 2 = Memory[Register]   ->     register
+                                                                                                   | Mode: 3 = Register           ->     memory[register]
+                                                                                                   | Mode: 4 = Register           ->     memory[imm32]
+                                                                                                   | Mode: 5 = Memory[imm32]      ->     Register
+
+load-byte:       Loads a byte to memory                   ->    [14, reg, rega, combined, combined, mode]         
+                 Snips the lower bits from a register
+
+load-word:       Loads a word to memory                   ->    [15, reg, rega, combined, combined, mode]          
+                 Snips the lower bits from a register                                              
+                                                                                                   | For both load-byte and load-word:
+                                                                                                   | Mode: 0 = Register -> Memory
+                                                                                                   | Mode: 1 = Register -> Memory[Register]
+
+read-byte:       Reads a byte from memory                ->     [16, reg, rega, combined, combined, mode]
+           
+read-word:       Reads a word from memory                ->     [17, reg, rega, combined, combined, mode]
+
+                                                                                                   | For both read-byte and read-word:
+                                                                                                   | Mode: 0 = Memory -> Register
+                                                                                                   | Mode: 1 = Memory[Register] -> Register
+                                                                                                    
+move-stack:      Moves SP to a new address               ->     [18, reg, -, combined, combined, mode]
+
+                                                                                                   | Mode: 0 = Memory -> Register
+                                                                                                   | Mode: 1 = Memory[Register] -> Register
+(same with push)
+pop is the same but only takes a register
