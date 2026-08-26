@@ -1,0 +1,97 @@
+OPCODE_HALT                                 = hlt (hlt)
+OPCODE_LOAD_IMM32                           = ldi (ldi r0, 0xFF/255)
+OPCODE_INDIR_JUMP                           = jmp (jmp 0xFF/255/r0)
+OPCODE_ADD                                  = add (add r0, r1/1234/0x1234)
+OPCODE_SUB                                  = sub (sub r0, r1/1234/0x1234)
+OPCODE_DIV                                  = div (div r0, r1/1234/0x1234)
+OPCODE_MUL                                  = mul (mul r0, r1/1234/0x1234)
+OPCODE_COMPARE                              = cmp (cmp r0, r1/0x1234/1234)
+OPCODE_INDIR_JUMP_EQ                        = je  (je label/addr)
+OPCODE_INDIR_JUMP_NE                        = jne (jne label/addr)
+OPCODE_INDIR_JUMP_HI                        = jh  (jh label/addr)
+OPCODE_INDIR_JUMP_LO                        = jl  (jl label/addr)
+OPCODE_INDIR_COPY_DATA                      = mov 
+(
+    mov [0x1234/1234], r0
+    mov r0, [0x1234/1234]
+    mov r0, [r1]
+    mov [r0], r1
+)
+
+
+OPCODE_WRITE_BYTE                           = wb 
+(
+    wb [0x12/12], r0
+    wb [r1], r0
+
+)
+OPCODE_WRITE_WORD                           = ww
+(
+    ww [0x1234/1234], r0
+    ww [r1], r0
+
+)
+
+OPCODE_READ_BYTE                            = rb
+(
+    rb r0, [0x1234/1234]
+    rb r0, [r1]
+
+)
+OPCODE_READ_WORD                            = rw
+(
+    rw r0, [0x1234/1234]
+    rw r0, [r1]
+
+)
+
+OPCODE_MOVE_STACK                           = ssp
+(
+    ssp r0
+    ssp 0x0D000000
+
+)
+OPCODE_PUSH                                 = push
+(
+    push 0xFF
+    push r0
+)
+OPCODE_POP                                  = pop
+(
+    pop r0
+)
+OPCODE_CALL                                 = call
+(
+    call label/addr
+)
+OPCODE_RET                                  = ret
+(
+    ret
+)
+OPCODE_SOFTWARE_INTERRUPT                   = int
+(
+    int 0x1 (no label taking here)
+)
+OPCODE_SOFTWARE_INTERRUPT_RETURN            = iret
+(
+    iret
+)
+OPCODE_PORT_OUT                             = out 
+(
+    out r0, 0x10
+    out r0, r1
+)
+OPCODE_PORT_IN                              = in
+(
+    in r0, 0x10
+    in r0, r1
+)
+OPCODE_CLIF                                 = cli
+(
+    cli
+)
+OPCODE_SLIF                                 = sti
+(
+    sti
+)
+OPCODE_CLEAR_FLAGS                          = clf

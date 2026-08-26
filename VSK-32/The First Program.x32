@@ -1,0 +1,29 @@
+ldi r0, msg
+ldi r2, video_mem
+jmp loop
+
+
+loop:
+  rb r1, [r0]
+  add r0, 1
+
+  cmp r1, 0
+  je end
+  clf
+
+  wb [r2], r1
+  add r2, 1
+
+  jmp loop 
+
+
+end:
+  cli
+  hlt
+
+
+msg:
+  db "Hello, World!", 0
+
+region 0x0B800000
+video_mem:
