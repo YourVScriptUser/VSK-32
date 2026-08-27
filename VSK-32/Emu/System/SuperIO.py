@@ -1,5 +1,8 @@
 # SuperIO.py
 
+# Local imports
+from Emu.System              import Vars
+
 # Lib imports
 import threading
 import sys
@@ -45,8 +48,6 @@ class InterruptHandler:
 
               time.sleep(0.001) # 1ms
 
-           sys.exit() # Immediately exit upon exit flag 
-
         self.thread = threading.Thread(target=Internal, daemon=True)
         self.thread.start()
 
@@ -57,10 +58,15 @@ class InterruptHandler:
 
 
 class PORTs:
-    KB_PORT = 1
+    KB_PORT                    = 0x4B # The keyboard port, holds the key pressed
+    STORAGE_STATUS_NOTIFY_PORT = 0x00 # Tells the disk to do something 
+    STORAGE_SECTOR_PORT        = 0xEA # Disk sector port
+    STORAGE_ADDRESS_PORT       = 0xEB # Where the disk writes the sector to memory
+    STORAGE_STORAGE_MODE       = 0xEC # Disk mode port 1 = read, 2 = write
+
 
 class ISRs:
-    KB_ISR = 0x01
+    KB_ISR = 0x01                     # Keyboard interrupt routine (id - not address!)
 
 
 class InterruptCausingDevices:
@@ -95,3 +101,62 @@ def sys_getkey():
         return ord(char)
 
     return False
+
+
+class NonInterruptThreadDevices:
+    def __init__(self, ports, memory):
+        self.ports  = ports
+        self.memory = memory
+  
+    def PollAllDevices(self):
+        for device in DEVICES:
+            device.poll(ports=self.ports, memory=self.memory)
+
+    class Disk:
+        @staticmethod
+        def poll(ports, memory):
+            # Read status port
+            is_ready = ports.read(port=PORTs.STORAGE_STATUS_NOTIFY_PORT)
+            mode     = ports.read(port=PORTs.STORAGE_STORAGE_MODE) 
+             # 1 = read
+             # 2 = write
+ 
+            if not is_ready or mode not in [1, 2]:
+                return
+
+            else:
+              if   mode == 1: 
+                sector  = ports.read(port=PORTs.STORAGE_SECTOR_PORT )
+                address = ports.read(port=PORTs.STORAGE_ADDRESS_PORT)
+                if sector >= Vars.DISK_END_SECTOR:
+                    return 
+
+                with open(Vars.DISK_PATH_RELATIVE, "rb") as f:
+                    byte = sector * Vars.DISK_SECTOR_SIZE 
+                    f.seek(byte)
+
+                    read = f.read(Vars.DISK_SECTOR_SIZE) 
+
+                for b in read:
+                    memory.write_byte(val=b, addr=address)
+                    address += 1
+
+              elif mode  == 2:
+                 sector  = ports.read(port=PORTs.STORAGE_SECTOR_PORT )
+                 address = ports.read(port=PORTs.STORAGE_ADDRESS_PORT)
+                 if sector >= Vars.DISK_END_SECTOR:
+                     return                   
+                 
+                 with open(Vars.DISK_PATH_RELATIVE, "r+b") as f:
+                     byte = sector * Vars.DISK_SECTOR_SIZE
+                     read = bytearray(0)
+                     
+                     offset = address
+                     for _ in range(Vars.DISK_SECTOR_SIZE):
+                         read.append(memory.read_byte(offset))
+                         offset += 1
+                         
+                     f.seek(byte)
+                     f.write(read)
+                         
+DEVICES = [NonInterruptThreadDevices.Disk]

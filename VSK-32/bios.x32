@@ -1,0 +1,104 @@
+; VSK-32 Official Sysrom BIOS
+; All Rights Reserved.
+
+; Written in x32 Assembly for the x32 Assembler
+
+; Hardware Ports:
+;  KB_PORT                       ->     0x4B # The keyboard port, holds the key pressed
+;  STORAGE_STATUS_NOTIFY_PORT    ->     0x00 # Tells the disk to do something 
+;  STORAGE_SECTOR_PORT           ->     0xEA # Disk sector port
+;  STORAGE_ADDRESS_PORT          ->     0xEB # Where the disk writes the sector to memory
+;  STORAGE_STORAGE_MODE          ->     0xEC # Disk mode port 1 = read, 2 = write
+
+; Hardware ISRs (IDs):
+;  KB_ISR                        ->     0x01 # Keyboard interrupt routine (id - not address!)
+
+; Exception ISRs (IDs) - Emulator Classes:
+;  System.Exceptions.InvalidOpcodeError.UnknownOpcode: 63
+;  System.Exceptions.InvalidOpcodeError.InvalidFlags:  62
+;  System.Exceptions.InvalidRegister:                  61
+;  System.Exceptions.InvalidMemoryWrite:               60
+;  System.Exceptions.UnknownError:                     59
+; (Pulled from emulator source code)
+
+; *4 for real address
+
+; Video Colors:
+;  130: RED,
+;  131: GREEN,
+;  132: BLUE,
+;  133: BRIGHT_BLACK,
+;  134: CYAN,
+;  135: BG_RED,
+;  136: RESET
+
+; BIOS Uses r20 as a text cursor
+; Do not clobber r20
+
+; Main Init
+; This code will soon be overwritten with IVT entires
+region 0x00000000
+cli                    ; Interrupts wont work this early
+clf                    ; Clear flags
+ssp  BIOS_STACK_BASE   ; Setup early BIOS stack
+jmp bios_entp
+
+; BIOS INTERRUPTS (SOON)
+
+; BIOS MAIN
+
+; Main BIOS Entrypoint
+bios_entp:
+  ; Initialize video cursor
+  ldi r20, VIDEO_MEM_BASE
+  ldi r10, STRING_BIOS_BANNER
+  call print
+  hlt
+
+
+; Main BIOS print routine
+; Register Args:
+; **r10**: String address
+print:
+  jmp print.loop
+  
+
+print.loop:
+  rb r11, [r10]
+
+  cmp r11, 0
+  je print.end
+
+  wb [r20], r11
+
+  add r10, 1
+  add r20, 1
+ 
+  jmp print.loop
+
+  
+
+print.end:
+  clf
+  ret
+
+
+; STACK POOL
+STRING_BIOS_BANNER: 
+  db 132, "VSK Software sysROM BIOS v1.0.0", 10
+  db      "VSK-32 Proprietary ROM BIOS", 10
+
+  db 0
+
+
+region 0x0000F000
+; Base address of the BIOS stack
+BIOS_STACK_BASE:
+
+region 0x0B800000
+; Base address of video memory
+VIDEO_MEM_BASE:
+
+
+
+

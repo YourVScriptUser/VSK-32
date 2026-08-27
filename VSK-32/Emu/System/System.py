@@ -2,6 +2,8 @@
  
 # Local imports
 from Emu.System.Dependencies import Teknikality
+from Emu.System              import Vars
+from Emu.Exceptions          import Exceptions
  
 # Lib imports
 import sys
@@ -20,17 +22,12 @@ def sys_write_stdout(msg):
     sys.stdout.write(msg + "\n")
     sys.stdout.flush()
  
-def VMError(py_code_class, cmsg, emsg, ecode):
-    """Arg order: python error, console message, GUI error message, error code"""
+
  
-    error_window(emsg, ecode)
- 
-    raise py_code_class(cmsg)
- 
-def error_window(error_message, error_code):
+def error_window(error_message, error_code, error_title='Application Error'):
     u_type = 0x0 | 0x10
  
-    ctypes.windll.user32.MessageBoxW(0, f"{error_message}\n\nError Code: {hex(error_code)}\nSee more in the emulator log terminal.", 'Application Error', u_type)
+    ctypes.windll.user32.MessageBoxW(0, f"{error_message}\n\nError Code: {hex(error_code)}", error_title, u_type)
  
 class DwordArray:
     """A helper object for 32-bit registers"""
@@ -42,32 +39,15 @@ class DwordArray:
         self.size               =       len(self.arr)
  
     def write(self, val, arr=0):
-        if val < 0:
-            VMError(ValueError,
-                    f"ERROR | Negative value passed to dwordarray.write() | Raised from -> write({val}, {arr})",
-                    f"Operation not allowed: Attempted negative number write to unsigned integer",
-                    0xAA
-                    )
  
         if not 0 <= arr <= self.max_index:
-            VMError(IndexError,
-                    f"ERROR | 32-bit register array index out of bounds: r{arr} | Raised from -> write({val}, {arr})",
-                    f"Attempted WRITE to invalid register: {arr}",
-                    0x10
-                    )
- 
-        if val > self.mask:
-            emu_warn(f"Integer overflow (register r{arr}): overflowed to 0x{format_hex_32(val & self.mask)}")
+            raise Exceptions.InvalidRegister
        
         self.arr[arr] = (val & self.mask)
  
     def read(self, arr=0):
         if not 0 <= arr <= self.max_index:
-           VMError(IndexError,
-                  f"ERROR | 32-bit register array index out of bounds: r{arr} | Raised from -> read({arr})",
-                  f"Attempted READ from invalid register: {arr}",
-                  0x10
-                  )
+            raise Exceptions.InvalidRegister
  
         return self.arr[arr]
  
@@ -76,11 +56,7 @@ class DwordArray:
  
     def increment(self, t=0, arr=0):
         if not 0 <= arr <= self.max_index:
-            VMError(IndexError,
-                    f"ERROR | 32-bit register array index out of bounds: r{arr} | Raised from -> increment({arr})",
-                    f"Attempted WRITE to invalid register: {arr}",
-                    0x10
-                    )
+            raise Exceptions.InvalidRegister
  
         current = self.read(arr=arr)
         current += 1 + t
@@ -89,11 +65,7 @@ class DwordArray:
  
     def decrement(self, t=0, arr=0):
         if not 0 <= arr <= self.max_index:
-            VMError(IndexError,
-                    f"ERROR | 32-bit register array index out of bounds: r{arr} | Raised from -> increment({arr})",
-                    f"Attempted WRITE to invalid register: {arr}",
-                    0x10
-                    )
+            raise Exceptions.InvalidRegister
  
         current = self.read(arr=arr)
         current -= 1 + t
@@ -120,6 +92,7 @@ class registers:
  
 class memory:
     MEM_SIZE = 256 * 1024 * 1024
+    MAX_ADDR = 0x0FFFFFFF
     class Map:
         """
         Class for resolving address regions in memory
@@ -136,15 +109,21 @@ class memory:
     # ----------------
  
     def read_byte(self, addr):
+        if addr > self.MAX_ADDR:
+            raise Exceptions.InvalidMemoryWrite
         return self.Memory[addr]
  
     def read_word(self, addr):
+        if addr > self.MAX_ADDR:
+            raise Exceptions.InvalidMemoryWrite        
         return (
             self.Memory[addr]
             | (self.Memory[addr + 1] << 8)
         )
  
     def read_dword(self, addr):
+        if addr > self.MAX_ADDR:
+            raise Exceptions.InvalidMemoryWrite        
         return (
             self.Memory[addr]
             | (self.Memory[addr + 1] << 8)
@@ -157,13 +136,19 @@ class memory:
     # -----------------
  
     def write_byte(self, addr, val):
+        if addr > self.MAX_ADDR:
+            raise Exceptions.InvalidMemoryWrite        
         self.Memory[addr] = val & 0xFF
  
     def write_word(self, addr, val):
+        if addr > self.MAX_ADDR:
+            raise Exceptions.InvalidMemoryWrite        
         self.Memory[addr]     = val & 0xFF
         self.Memory[addr + 1] = (val >> 8) & 0xFF
  
     def write_dword(self, addr, val):
+        if addr > self.MAX_ADDR:
+            raise Exceptions.InvalidMemoryWrite        
         self.Memory[addr]     = val & 0xFF
         self.Memory[addr + 1] = (val >> 8) & 0xFF
         self.Memory[addr + 2] = (val >> 16) & 0xFF

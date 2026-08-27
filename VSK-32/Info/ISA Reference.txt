@@ -1,0 +1,113 @@
+Instruction Encoding:
+opcode, byte operand 1, byte operand 2, immediate word, extra word, flags
+
+ 
+opcode     (byte)  - The Opcode
+BOP_1      (byte)  - Byte Operand 1
+BOP_2      (byte)  - Byte Operand 2
+imm16      (word)  - 16-bit Immediate
+extra      (word)  - Extra 16-bit Operand
+flags      (byte)  - Extra flags for the opcode
+imm32      (dword) - imm16 and extra combined        *does not add extra bytes, only a combination of imm16 and extra
+ 
+
+ 
+ISA:
+ 
+halt-cpu:        Halts the cpu                            ->    [1, -, -, -, -, -]                 | No flags.
+load-imm32:      Loads a 32-bit integer into a register   ->    [2, reg, -, combined, combined, -]          | No flags.                               *Numbers can still be 8-bit and 16-bit, 32-bit is just the max                        
+ 
+indir-jmp:       Moves rIP to a new address               ->    [3, reg, -, combined, combined, mode]       | Mode: 0 = Indirect jump to imm16/extra
+                                                                                                   | Mode: 1 = Indirect jump to regs[reg]
+ 
+add:             Adds reg1 to reg2 and stores in reg1     ->    [4, reg1, reg2, imma, -, mode]     | Mode: 0 = reg1 = reg1+reg2
+                 Supports adding 16-bit immediates (imma)                                          | Mode: 1 = reg1=reg1+imm32
+(all the same with sub, div, mul (opcodes 5, 6, and 7))
+ 
+compare:         Updates rflags based on a comparison     ->    [8, reg1, reg2, combined, combined, mode]    | Mode: 0 = reg1 ==/!=/</> reg2
+                                                                                                   | Mode: 1 = reg1 ==/!=/</> imm32
+ 
+indir-jmp-eq:    Directly jumps to 32-bit address         ->    [9, reg1, reg2, combined, combined, -]      | No flags.
+                 if reg1 == reg2
+ 
+(all the same with jump-if-neq, jump-if-high, jump-if-low (opcodes 10, 11 and 12))
+                                      
+data-move:       Moves (COPIES) Data                      ->    [13, reg1, reg2, combined, combined, mode] 
+                 Moves from alot of different places
+                 (does load-dword)                                                                 
+                                                                                                   | Mode: 0 = Register           ->     memory
+                                                                                                   | Mode: 1 = Memory             ->     register
+                                                                                                   | Mode: 2 = Memory[Register]   ->     register
+                                                                                                   | Mode: 3 = Register           ->     memory[register]
+                                                                              
+
+load-byte:       Loads a byte to memory                   ->    [14, reg, rega, combined, combined, mode]         
+                 Snips the lower bits from a register
+
+load-word:       Loads a word to memory                   ->    [15, reg, rega, combined, combined, mode]          
+                 Snips the lower bits from a register                                              
+                                                                                                   | For both load-byte and load-word:
+                                                                                                   | Mode: 0 = Register -> Memory
+                                                                                                   | Mode: 1 = Register -> Memory[Register]
+
+read-byte:       Reads a byte from memory                ->     [16, reg, rega, combined, combined, mode]
+           
+read-word:       Reads a word from memory                ->     [17, reg, rega, combined, combined, mode]
+
+                                                                                                   | For both read-byte and read-word:
+                                                                                                   | Mode: 0 = Memory -> Register
+                                                                                                   | Mode: 1 = Memory[Register] -> Register
+                                                                                                    
+move-stack:      Moves SP to a new address               ->     [18, reg, -, combined, combined, mode]
+
+                                                                                                   | Mode: 0 = Memory -> Register
+                                                                                                   | Mode: 1 = Memory[Register] -> Register
+(same with push)
+pop is the same but only takes a register
+
+pmio-out:        Writes a value to a port                ->     [19, reg, regp, port, -, mode]
+
+                                                                                                   | Mode: 0 = port => Register[regp]
+                                                                                                   | Mode: 1 = port => port
+
+pmio-in:        reads a value from a port               ->     [20, reg, regp, port, -, mode]
+
+                                                                                                   Modes same as pmio-out
+
+                                                                                                   
+(REFERENCE NO LONGER BEING UPDATED, COULD NOT BE STUFFED)
+set interrupt flag and clear interrupt flag are just the opcode
+no need for further explanation
+(opcodes 27 and 28)
+
+Full opcode sheet (as some above are wrong)
+
+        OPCODE_HALT                         -> 0x01
+        OPCODE_LOAD_IMM32                   -> 0x02
+        OPCODE_INDIR_JUMP                   -> 0x03
+        OPCODE_ADD                          -> 0x04
+        OPCODE_SUB                          -> 0x05
+        OPCODE_DIV                          -> 0x06
+        OPCODE_MUL                          -> 0x07
+        OPCODE_COMPARE                      -> 0x08
+        OPCODE_INDIR_JUMP_EQ                -> 0x09
+        OPCODE_INDIR_JUMP_NE                -> 0x0A
+        OPCODE_INDIR_JUMP_HI                -> 0x0B
+        OPCODE_INDIR_JUMP_LO                -> 0x0C
+        OPCODE_INDIR_COPY_DATA              -> 0x0D
+        OPCODE_WRITE_BYTE                   -> 0x0E
+        OPCODE_WRITE_WORD                   -> 0x0F
+        OPCODE_READ_BYTE                    -> 0x10
+        OPCODE_READ_WORD                    -> 0x11
+        OPCODE_MOVE_STACK                   -> 0x12
+        OPCODE_PUSH                         -> 0x13
+        OPCODE_POP                          -> 0x14
+        OPCODE_CALL                         -> 0x15
+        OPCODE_RET                          -> 0x16
+        OPCODE_SOFTWARE_INTERRUPT           -> 0x17
+        OPCODE_SOFTWARE_INTERRUPT_RETURN    -> 0x18
+        OPCODE_PORT_OUT                     -> 0x19
+        OPCODE_PORT_IN                      -> 0x1A
+        OPCODE_CLIF                         -> 0x1B
+        OPCODE_SLIF                         -> 0x1C
+

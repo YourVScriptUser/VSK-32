@@ -777,15 +777,18 @@ def assemble(text, org=0):
     label-relative jump/call/mov/etc targets) are offset by this amount.
 
     Supports interleaved instructions and db/dw/dd data directives, plus a
-    `region <addr>` directive that repositions the write cursor (e.g. to
-    place data or code at a fixed address like video memory).
+    `region <addr>` directive that simply repositions the write pointer for
+    whatever comes next (like a traditional ORG directive) -- it doesn't
+    care what came before or after. Any gap this leaves in the output is
+    zero-filled.
 
-    Returns (segments, listing, labels) where:
-      - segments is a list of {"start": addr, "data": bytes} dicts, one per
-        contiguous run of bytes (a `region` jump that leaves a gap starts a
-        new segment instead of zero-padding a single giant buffer)
+    Returns (code, listing, labels, base_addr) where:
+      - code is the assembled bytes, covering [base_addr, highest address
+        written + its size)
       - listing is a list of (address, item, encoded_bytes) for -l output,
         item being an Instr or a DataItem
+      - base_addr is the lowest address anything was written to (equal to
+        `org` unless a `region` directive moved below it)
     """
     lines = preprocess(text)
 
@@ -805,15 +808,17 @@ def assemble(text, org=0):
             continue
 
         if ln.mnem == "region":
-            # A region directive may still carry a label on the same line
-            # (e.g. "region 0x1000" with a label on the line before it, or
-            # inline "here: region 0x1000" attaching to the NEW address).
-            marker = assemble_directive_line(ln)
-            addr = marker.addr
+            # Any labels that were pending before this directive belong at
+            # the CURRENT address -- region only affects what comes AFTER
+            # it, never labels sitting above it. Resolve those first, then
+            # move the cursor.
             for lbl in ln.label:
                 if lbl in labels:
                     raise AsmError(f"Duplicate label '{lbl}'", ln.no, ln.raw)
                 labels[lbl] = addr
+
+            marker = assemble_directive_line(ln)
+            addr = marker.addr
             continue
 
         for lbl in ln.label:
@@ -851,25 +856,26 @@ def assemble(text, org=0):
                         )
                     field.value = labels[name]
 
-    # Emit into contiguous segments. A new segment starts wherever `region`
-    # caused a jump away from the natural next address (i.e. wherever there's
-    # a gap between one item's end and the next item's start). This keeps a
-    # normal program (no gaps) as a single segment/file, while something like
-    # `region 0x0B800000` after code at address 0 becomes its own small
-    # segment instead of forcing one huge zero-padded buffer.
-    items.sort(key=lambda t: t[0])
+    # Emit into one flat buffer covering [base_addr, end_addr). `region`
+    # jumps just move where the next bytes land; any gap left behind (or
+    # before, if a region moved below `org`) is zero-filled.
+    if items:
+        base_addr = min(a for a, _ in items)
+        end_addr = max(a + (item.size if isinstance(item, DataItem) else INSTR_SIZE)
+                        for a, item in items)
+    else:
+        base_addr = org
+        end_addr = org
 
-    segments = []  # list of dicts: {"start": int, "data": bytearray}
-    for a, item in items:
+    out = bytearray(end_addr - base_addr)
+    listing = []
+    for a, item in sorted(items, key=lambda t: t[0]):
         packed = item.pack()
-        if segments and a == segments[-1]["start"] + len(segments[-1]["data"]):
-            segments[-1]["data"] += packed
-        else:
-            segments.append({"start": a, "data": bytearray(packed)})
+        off = a - base_addr
+        out[off:off + len(packed)] = packed
+        listing.append((a, item, packed))
 
-    listing = [(a, item, item.pack()) for a, item in items]
-
-    return segments, listing, labels
+    return bytes(out), listing, labels, base_addr
 
 
 def format_listing(listing):
@@ -912,36 +918,23 @@ def main(argv=None):
         text = f.read()
 
     try:
-        segments, listing, labels = assemble(text, org=args.org)
+        code, listing, labels, base_addr = assemble(text, org=args.org)
     except AsmError as e:
         print(f"Assembly failed: {e}", file=sys.stderr)
         return 1
 
     out_path = args.output or (args.input.rsplit(".", 1)[0] + ".bin")
-    total_bytes = sum(len(seg["data"]) for seg in segments)
+    with open(out_path, "wb") as f:
+        f.write(code)
 
-    if len(segments) == 1:
-        with open(out_path, "wb") as f:
-            f.write(bytes(segments[0]["data"]))
-        print(f"Assembled {len(listing)} item(s), {total_bytes} bytes -> {out_path}")
-        if segments[0]["start"] != args.org:
-            print(f"Load address: 0x{segments[0]['start']:06X}")
-    else:
-        # Multiple disjoint regions -> one file per segment, since flattening
-        # them into a single buffer would mean zero-padding across the gap
-        # (which can be enormous, e.g. jumping into video memory).
-        base, ext = out_path.rsplit(".", 1) if "." in out_path else (out_path, "bin")
-        print(f"Assembled {len(listing)} item(s) into {len(segments)} segment(s):")
-        for i, seg in enumerate(segments):
-            seg_path = f"{base}.seg{i}_0x{seg['start']:06X}.{ext}"
-            with open(seg_path, "wb") as f:
-                f.write(bytes(seg["data"]))
-            print(f"  segment {i}: 0x{seg['start']:06X}, {len(seg['data'])} bytes -> {seg_path}")
+    print(f"Assembled {len(listing)} item(s), {len(code)} bytes -> {out_path}")
+    if base_addr != args.org:
         print(
-            "\nNOTE: your program uses 'region' to jump between non-adjacent "
-            "addresses, so it was split into separate files above instead of "
-            "one giant zero-padded .bin. Load each at the address in its name."
+            f"NOTE: a 'region' directive moved below --org; load this file "
+            f"at address 0x{base_addr:06X}, not 0x{args.org:06X}."
         )
+    elif args.org:
+        print(f"Load address: 0x{base_addr:06X}")
 
     if labels:
         print("\nLabels:")
