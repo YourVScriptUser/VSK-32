@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSK-32 — Technical Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:          #14150f;
+    --bg-raised:   #191a13;
+    --panel:       #1d1e16;
+    --panel-alt:   #22231a;
+    --border:      #35362a;
+    --border-soft: #26271d;
+    --text:        #d9d5c3;
+    --text-dim:    #8f8c78;
+    --text-faint:  #63614f;
+    --amber:       #dfa23a;
+    --amber-dim:   #8a6a2e;
+    --cyan:        #5fb3ac;
+    --red:         #b2503a;
+    --green:       #7e9c4f;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --side-w: 280px;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  ::selection{ background:var(--amber-dim); color:#fff; }
+
+  a{ color:var(--cyan); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+  a:focus-visible, button:focus-visible, summary:focus-visible{
+    outline:2px solid var(--amber); outline-offset:2px;
+  }
+
+  code, kbd, .mono{ font-family:var(--mono); }
+
+  code.inline{
+    background:var(--panel-alt);
+    border:1px solid var(--border-soft);
+    padding:0.1em 0.4em;
+    border-radius:3px;
+    font-size:0.88em;
+    color:var(--amber);
+    white-space:nowrap;
+  }
+
+  h1,h2,h3,h4{
+    font-family:var(--mono);
+    font-weight:600;
+    color:#f1eee0;
+    letter-spacing:-0.01em;
+    line-height:1.25;
+  }
+
+  p{ max-width:70ch; color:var(--text); }
+  .lede{ max-width:62ch; color:var(--text-dim); }
+
+  /* ---------- Layout shell ---------- */
+
+  .shell{
+    display:grid;
+    grid-template-columns:var(--side-w) 1fr;
+    min-height:100vh;
+  }
+
+  /* ---------- Sidebar ---------- */
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    overflow-y:auto;
+    border-right:1px solid var(--border-soft);
+    background:var(--bg-raised);
+    padding:22px 0 40px;
+  }
+
+  .brand{
+    padding:0 22px 18px;
+    border-bottom:1px solid var(--border-soft);
+    margin-bottom:14px;
+  }
+  .brand .tag{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--bg);
+    background:var(--amber);
+    padding:2px 6px;
+    border-radius:2px;
+    margin-bottom:10px;
+    font-weight:600;
+  }
+  .brand h1{
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  .brand p{
+    margin:0;
+    font-size:12.5px;
+    color:var(--text-faint);
+    max-width:none;
+  }
+
+  nav.toc{ padding:0 10px; }
+  nav.toc .group{ margin-bottom:4px; }
+  nav.toc .group-label{
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--text-faint);
+    padding:14px 12px 6px;
+    letter-spacing:0.02em;
+  }
+  nav.toc a{
+    display:flex;
+    gap:10px;
+    align-items:baseline;
+    padding:6px 12px;
+    border-radius:3px;
+    color:var(--text-dim);
+    font-size:13.5px;
+    line-height:1.4;
+  }
+  nav.toc a .num{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-faint);
+    min-width:18px;
+  }
+  nav.toc a:hover{
+    background:var(--panel-alt);
+    text-decoration:none;
+    color:var(--text);
+  }
+  nav.toc a.active{
+    background:var(--panel-alt);
+    color:var(--amber);
+    box-shadow:inset 2px 0 0 var(--amber);
+  }
+  nav.toc a.active .num{ color:var(--amber); }
+
+  /* ---------- Main content ---------- */
+
+  main{ min-width:0; }
+
+  .hero{
+    padding:64px 56px 48px;
+    border-bottom:1px solid var(--border-soft);
+    background:
+      radial-gradient(700px 260px at 85% -10%, rgba(223,162,58,0.07), transparent 60%),
+      var(--bg);
+  }
+
+  .crt{
+    max-width:560px;
+    background:#0e0f0a;
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:16px 18px;
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.7;
+    color:#d7d3c0;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.4), 0 20px 50px -20px rgba(0,0,0,0.6);
+    margin-bottom:34px;
+  }
+  .crt .l1{ color:var(--cyan); }
+  .crt .l2{ color:var(--cyan); }
+  .crt .dim{ color:var(--text-faint); }
+  .crt .ok{ color:var(--text-faint); }
+  .crt .ok b{ color:var(--text-dim); font-weight:400; }
+  .cursor{
+    display:inline-block;
+    width:7px; height:13px;
+    background:var(--amber);
+    margin-left:2px;
+    vertical-align:-2px;
+    animation:blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink{ 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+
+  .hero h2{
+    font-size:42px;
+    margin:0 0 14px;
+    color:#f4f1e6;
+  }
+  .hero .lede{ font-size:16.5px; margin-bottom:28px; }
+
+  .stat-strip{
+    display:grid;
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:1px;
+    background:var(--border-soft);
+    border:1px solid var(--border-soft);
+    max-width:920px;
+    margin-top:8px;
+  }
+  .stat{
+    background:var(--bg-raised);
+    padding:14px 14px 12px;
+  }
+  .stat .n{
+    font-family:var(--mono);
+    font-size:20px;
+    color:var(--amber);
+    display:block;
+  }
+  .stat .l{
+    font-size:11px;
+    color:var(--text-faint);
+    display:block;
+    margin-top:2px;
+  }
+
+  section{
+    padding:52px 56px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  section:last-of-type{ border-bottom:none; }
+
+  .kicker{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-faint);
+    margin-bottom:6px;
+  }
+  section > h2{
+    font-size:26px;
+    margin:0 0 16px;
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+  }
+  section > h2 .idx{ color:var(--amber-dim); font-size:18px; }
+
+  h3{ font-size:18px; margin:32px 0 10px; color:var(--amber); }
+  h3:first-of-type{ margin-top:26px; }
+  h4{ font-size:14.5px; margin:22px 0 8px; color:var(--text); }
+
+  .callout{
+    border:1px solid var(--border);
+    background:var(--panel);
+    border-left:3px solid var(--amber-dim);
+    padding:14px 16px;
+    margin:18px 0;
+    font-size:14.5px;
+    color:var(--text-dim);
+    max-width:70ch;
+  }
+  .callout.warn{ border-left-color:var(--red); }
+  .callout.warn .lbl{ color:var(--red); }
+  .callout .lbl{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--amber);
+    display:block;
+    margin-bottom:6px;
+  }
+
+  /* code blocks */
+
+  .code-block{
+    margin:16px 0 24px;
+    border:1px solid var(--border);
+    border-radius:4px;
+    overflow:hidden;
+    background:#101109;
+  }
+  .code-cap{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--text-faint);
+    padding:8px 14px;
+    border-bottom:1px solid var(--border-soft);
+    background:var(--panel-alt);
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .code-cap button{
+    font-family:var(--mono);
+    font-size:11px;
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--text-faint);
+    border-radius:3px;
+    padding:2px 8px;
+    cursor:pointer;
+  }
+  .code-cap button:hover{ color:var(--text); border-color:var(--text-faint); }
+  pre{
+    margin:0;
+    padding:14px 16px 16px;
+    overflow-x:auto;
+    font-family:var(--mono);
+    font-size:12.8px;
+    line-height:1.65;
+    color:#cfcbb8;
+  }
+  pre .cm{ color:var(--text-faint); }
+  pre .mn{ color:var(--cyan); }
+  pre .lb{ color:var(--amber); }
+  pre .im{ color:#b7c98a; }
+
+  /* tables */
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:14px 0 26px;
+    font-size:13.5px;
+  }
+  caption{
+    text-align:left;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--text-faint);
+    margin-bottom:6px;
+  }
+  th, td{
+    text-align:left;
+    padding:8px 12px;
+    border-bottom:1px solid var(--border-soft);
+    vertical-align:top;
+  }
+  th{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-faint);
+    font-weight:500;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  td.num, td .num{ font-family:var(--mono); color:var(--amber); white-space:nowrap; }
+  td.addr{ font-family:var(--mono); color:var(--cyan); white-space:nowrap; }
+  tr:hover td{ background:var(--panel); }
+  .table-wrap{ overflow-x:auto; }
+
+  ul, ol{ max-width:68ch; padding-left:1.3em; color:var(--text); }
+  li{ margin:4px 0; }
+  li::marker{ color:var(--text-faint); }
+
+  /* memory map bar */
+
+  .memmap{
+    border:1px solid var(--border);
+    border-radius:4px;
+    overflow:hidden;
+    max-width:760px;
+    margin:18px 0 28px;
+    font-family:var(--mono);
+    font-size:12px;
+  }
+  .memrow{
+    display:grid;
+    grid-template-columns:150px 1fr;
+    border-top:1px solid var(--border-soft);
+  }
+  .memrow:first-child{ border-top:none; }
+  .memrow .addr{
+    padding:10px 12px;
+    color:var(--cyan);
+    background:var(--panel);
+    border-right:1px solid var(--border-soft);
+  }
+  .memrow .desc{
+    padding:10px 14px;
+    color:var(--text-dim);
+    font-family:var(--sans);
+    font-size:13px;
+  }
+  .memrow .desc b{ color:var(--text); font-weight:600; }
+
+  /* file grid */
+
+  .filegrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+    gap:12px;
+    margin:18px 0 10px;
+  }
+  .filecard{
+    border:1px solid var(--border);
+    background:var(--panel);
+    border-radius:4px;
+    padding:14px 16px;
+  }
+  .filecard .fn{
+    font-family:var(--mono);
+    color:var(--amber);
+    font-size:13.5px;
+    display:block;
+    margin-bottom:6px;
+  }
+  .filecard p{
+    font-size:13px;
+    color:var(--text-dim);
+    margin:0;
+    max-width:none;
+  }
+
+  footer{
+    padding:36px 56px 60px;
+    color:var(--text-faint);
+    font-size:12.5px;
+  }
+  footer p{ max-width:60ch; }
+
+  /* mobile */
+
+  .nav-toggle{ display:none; }
+
+  @media (max-width: 920px){
+    .shell{ grid-template-columns:1fr; }
+    .sidebar{
+      position:fixed;
+      z-index:30;
+      left:0; top:0;
+      width:min(84vw, 320px);
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:20px 0 40px rgba(0,0,0,0.5);
+    }
+    .sidebar.open{ transform:translateX(0); }
+    .nav-toggle{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      position:fixed;
+      top:14px; left:14px;
+      z-index:31;
+      background:var(--panel);
+      border:1px solid var(--border);
+      color:var(--text);
+      font-family:var(--mono);
+      font-size:12px;
+      padding:8px 12px;
+      border-radius:4px;
+    }
+    .hero, section, footer{ padding-left:24px; padding-right:24px; }
+    .hero{ padding-top:70px; }
+    .stat-strip{ grid-template-columns:repeat(2,1fr); }
+    .hero h2{ font-size:30px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="sidebar">☰ Contents</button>
+
+<div class="shell">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="tag">TECHNICAL REFERENCE</span>
+      <h1>VSK-32</h1>
+      <p>Emulator, BIOS &amp; SSFS filesystem — annotated from source</p>
+    </div>
+    <nav class="toc">
+      <div class="group">
+        <div class="group-label">SYSTEM</div>
+        <a href="#overview"><span class="num">01</span>Overview</a>
+        <a href="#architecture"><span class="num">02</span>Runtime architecture</a>
+        <a href="#cpu"><span class="num">03</span>CPU &amp; registers</a>
+        <a href="#memory"><span class="num">04</span>Memory &amp; map</a>
+        <a href="#instr-format"><span class="num">05</span>Instruction encoding</a>
+        <a href="#opcodes"><span class="num">06</span>Instruction set</a>
+        <a href="#exceptions"><span class="num">07</span>Exceptions &amp; faults</a>
+        <a href="#interrupts"><span class="num">08</span>Interrupts</a>
+      </div>
+      <div class="group">
+        <div class="group-label">I/O</div>
+        <a href="#ports"><span class="num">09</span>Ports &amp; devices</a>
+        <a href="#video"><span class="num">10</span>Video &amp; console</a>
+        <a href="#gui"><span class="num">11</span>Live debugger GUI</a>
+      </div>
+      <div class="group">
+        <div class="group-label">FIRMWARE</div>
+        <a href="#bios-map"><span class="num">12</span>BIOS memory layout</a>
+        <a href="#bios-boot"><span class="num">13</span>Boot sequence</a>
+        <a href="#bios-abi"><span class="num">14</span>BIOS interrupt ABI</a>
+      </div>
+      <div class="group">
+        <div class="group-label">STORAGE</div>
+        <a href="#ssfs"><span class="num">15</span>SSFS filesystem</a>
+        <a href="#ssfs-tool"><span class="num">16</span>ssfs.py CLI</a>
+      </div>
+      <div class="group">
+        <div class="group-label">REFERENCE</div>
+        <a href="#config"><span class="num">17</span>Configuration</a>
+        <a href="#shutdown"><span class="num">18</span>Shutdown &amp; dumps</a>
+        <a href="#utilities"><span class="num">19</span>Utility layer</a>
+        <a href="#files"><span class="num">20</span>File map</a>
+      </div>
+    </nav>
+  </aside>
+
+  <main>
+
+    <div class="hero">
+      <div class="crt"><span class="l1">VSK Software sysROM BIOS v1.0.0</span><br>
+<span class="l2">VSK-32 Proprietary ROM BIOS</span><br>
+<br>
+<span class="dim">Initializing hardware...</span> <span class="ok"><b>done</b></span><br>
+<span class="dim">Initializing interrupts...</span> <span class="ok"><b>done</b></span><br>
+<span class="dim">Reading boot sector...</span><span class="cursor"></span></div>
+
+      <h2>VSK-32 Technical Reference</h2>
+      <p class="lede">A software CPU, BIOS and disk stack: a 32-bit fetch-decode-execute core written in Python, a ROM BIOS written in its own assembly dialect, and a flat-file disk format called SSFS underneath it. This document walks through all of it, end to end, from the reset vector to the sector reader.</p>
+
+      <div class="stat-strip">
+        <div class="stat"><span class="n">24</span><span class="l">general registers</span></div>
+        <div class="stat"><span class="n">33</span><span class="l">opcodes</span></div>
+        <div class="stat"><span class="n">256 MB</span><span class="l">address space</span></div>
+        <div class="stat"><span class="n">512 MB</span><span class="l">disk image</span></div>
+        <div class="stat"><span class="n">1024 B</span><span class="l">sector size</span></div>
+        <div class="stat"><span class="n">200 kHz</span><span class="l">target clock</span></div>
+      </div>
+    </div>
+
+    <!-- 01 OVERVIEW -->
+    <section id="overview">
+      <div class="kicker">01 / SYSTEM</div>
+      <h2><span class="idx">§</span>Overview</h2>
+      <p>VSK-32 is a self-contained virtual machine: a Python program emulates a 32-bit processor, memory, a handful of I/O ports and two peripherals (keyboard, disk), and boots a BIOS image the same way real firmware would boot on real hardware. The BIOS reads a boot sector off a virtual disk, hands off to whatever it finds there, and the emulator's job from that point on is simply to keep fetching, decoding and executing instructions.</p>
+      <p>Three pieces make up the whole stack:</p>
+      <ul>
+        <li><b>The emulator</b> — a Python process that owns memory, registers, ports and timing (<code class="inline">Emulator.py</code>, <code class="inline">System.py</code>, <code class="inline">SuperIO.py</code>).</li>
+        <li><b>The BIOS</b> — firmware written in VSK-32's own assembly language, assembled into a ROM image the emulator loads at address zero (<code class="inline">bios.x32</code>).</li>
+        <li><b>SSFS</b> — a minimal sector-based file format used on the virtual disk image, plus a host-side tool for reading it (<code class="inline">ssfs.py</code>).</li>
+      </ul>
+      <div class="callout">
+        <span class="lbl">SCOPE OF THIS DOCUMENT</span>
+        Everything below is drawn directly from the provided source files. Where a detail (such as an unused assembly mnemonic) isn't demonstrated anywhere in the source, that's called out explicitly rather than guessed at.
+      </div>
+    </section>
+
+    <!-- 02 ARCHITECTURE -->
+    <section id="architecture">
+      <div class="kicker">02 / SYSTEM</div>
+      <h2><span class="idx">§</span>Runtime architecture</h2>
+      <p>Starting <code class="inline">Emulator.py</code> runs through a fixed bring-up sequence before any user code executes:</p>
+      <ol>
+        <li>Imports <code class="inline">System</code> and <code class="inline">SuperIO</code>; <code class="inline">System.py</code> immediately checks it's running on Windows (<code class="inline">os.name == "nt"</code>) and hides the console cursor.</li>
+        <li>Allocates a 256&nbsp;MB <code class="inline">memory</code> object, a <code class="inline">registers</code> object, and a 256-slot port-I/O buffer.</li>
+        <li>Starts the interrupt-polling thread (keyboard) and constructs the non-interrupt device handler (disk).</li>
+        <li>Starts a background thread that redraws the terminal from video memory roughly 30 times a second.</li>
+        <li><code class="inline">LoadVMBios()</code> loads <code class="inline">VM_BIOS/bios.rom</code> into memory at <code class="inline">0x00000000</code>, then <code class="inline">EmuRun()</code> verifies <code class="inline">VM_DISK/vmdisk.img</code> exists and is exactly 512&nbsp;MB.</li>
+        <li>The main loop begins: batches of 500 <code class="inline">cpu32.step()</code> + <code class="inline">cpu32.interrupt_tick()</code> calls, paced to a 200&nbsp;kHz theoretical ceiling.</li>
+        <li>On <kbd>Ctrl+C</kbd> or an unhandled host-level exception, <code class="inline">Shutdown()</code> runs: final register/flag state is printed, a memory dump is optionally written, and every background thread is joined before exit.</li>
+      </ol>
+      <div class="callout">
+        <span class="lbl">TIMING MODEL</span>
+        The clock isn't a real hardware timer — <code class="inline">EmuRun()</code> runs instructions in batches of 500, measures how long the batch took, and sleeps off the difference against a 200&nbsp;kHz target (<code class="inline">TARGET_BATCH_TIME = 500 / 200_000</code>). Actual throughput depends on host CPU speed and Python overhead once instructions get expensive (disk I/O, GUI lock contention).
+      </div>
+    </section>
+
+    <!-- 03 CPU -->
+    <section id="cpu">
+      <div class="kicker">03 / SYSTEM</div>
+      <h2><span class="idx">§</span>CPU &amp; registers</h2>
+      <p>The processor is modeled by the <code class="inline">cpu32</code> class in <code class="inline">Emulator.py</code>: a static fetch → decode → execute loop with no pipelining, caching or speculative execution — one instruction fully completes before the next is fetched.</p>
+
+      <h3>Register file</h3>
+      <div class="table-wrap">
+      <table>
+        <caption>Registers (System.py::registers)</caption>
+        <thead><tr><th>Register</th><th>Width</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">r0 – r23</td><td>32-bit</td><td>General purpose. Backed by <code class="inline">DwordArray(24)</code>, every write is masked to <code class="inline">0xFFFFFFFF</code>.</td></tr>
+          <tr><td class="mono">ip</td><td>32-bit</td><td>Instruction pointer. Advanced by <code class="inline">fetch8/16/32</code> as each instruction field is read.</td></tr>
+          <tr><td class="mono">sp</td><td>32-bit</td><td>Stack pointer. Moved explicitly (<code class="inline">ssp</code>) or implicitly by push/pop/call/ret/interrupts.</td></tr>
+          <tr><td class="mono">regs32_save</td><td>24 × 32-bit</td><td>Shadow copy of r0–r23, saved on interrupt entry and restored on <code class="inline">iret</code> — the CPU's only register-save mechanism.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>Reading or writing outside index 0–23 raises <code class="inline">InvalidRegister</code>, which the CPU turns into a fault (see <a href="#exceptions">§07</a>) rather than a Python crash.</p>
+
+      <h3>Flags</h3>
+      <div class="table-wrap">
+      <table>
+        <caption>Flag register (four independent bits)</caption>
+        <thead><tr><th>Flag</th><th>Set by</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">EQ</td><td><code class="inline">cmp</code></td><td>Last comparison's operands were equal.</td></tr>
+          <tr><td class="mono">HI</td><td><code class="inline">cmp</code></td><td>First operand was greater than the second.</td></tr>
+          <tr><td class="mono">LO</td><td><code class="inline">cmp</code></td><td>First operand was less than the second.</td></tr>
+          <tr><td class="mono">IF</td><td><code class="inline">cli</code> / <code class="inline">sti</code></td><td>Interrupt enable. Gates whether <code class="inline">interrupt_tick()</code> can deliver a pending hardware interrupt.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p><code class="inline">clf</code> (<span class="mono">OPCODE_CLEAR_FLAGS</span>) resets <span class="mono">EQ/HI/LO</span> only — it deliberately leaves <span class="mono">IF</span> untouched.</p>
+
+      <h3>Stack</h3>
+      <p>The stack always moves in 4-byte (dword) units, growing downward:</p>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Op</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">push val</td><td><code class="inline">sp -= 4</code>, then writes a dword to <code class="inline">[sp]</code>.</td></tr>
+          <tr><td class="mono">pop</td><td>Reads a dword from <code class="inline">[sp]</code>, then <code class="inline">sp += 4</code>.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>Nothing enforces stack bounds or alignment — a runaway stack simply corrupts whatever memory it walks into. The BIOS documents (but the CPU does not enforce) two conventional stack regions: a small BIOS-only stack and a larger kernel stack set up just before jumping to the boot sector — see <a href="#bios-map">§12</a>.</p>
+    </section>
+
+    <!-- 04 MEMORY -->
+    <section id="memory">
+      <div class="kicker">04 / SYSTEM</div>
+      <h2><span class="idx">§</span>Memory &amp; address map</h2>
+      <p>Memory is one flat <code class="inline">bytearray</code>, 256&nbsp;MB (<code class="inline">256 * 1024 * 1024</code>) in size, addressed <code class="inline">0x00000000</code>–<code class="inline">0x0FFFFFFF</code>. Byte, word (16-bit) and dword (32-bit) reads/writes are all little-endian and unaligned-safe (they just index consecutive bytes). Any address past <code class="inline">MAX_ADDR</code> raises <code class="inline">InvalidMemoryWrite</code> — on both reads and writes, despite the exception's name.</p>
+      <div class="callout warn">
+        <span class="lbl">NO MEMORY PROTECTION</span>
+        A source comment notes protection was removed on purpose: <em>"Memory protection has been removed as it bought performance down to the Hz."</em> Any instruction can read or write any address in range, including the IVT, the BIOS's own code, or another process's conceptual "kernel" region. This is a deliberate performance trade-off in the emulator, not an oversight to work around.
+      </div>
+
+      <h3>Fixed memory regions</h3>
+      <div class="memmap">
+        <div class="memrow"><div class="addr">0000 0000<br>– 0000 00FF</div><div class="desc"><b>Interrupt Vector Table (IVT).</b> 64 dword-sized slots (256B ÷ 4). Slot <i>n</i> lives at address <i>n</i>×4 and holds the 32-bit address of a handler routine.</div></div>
+        <div class="memrow"><div class="addr">0B80 0000<br>– 0B80 0FFF</div><div class="desc"><b>Video memory.</b> 4096-byte text buffer read by the console refresh thread. See <a href="#video">§10</a>.</div></div>
+      </div>
+      <p>Everything else in the address space is unreserved as far as the CPU is concerned — regions like the BIOS's own code, the keyboard buffer, or a boot sector are conventions the BIOS defines and respects, not hardware-enforced zones. See <a href="#bios-map">§12</a> for the BIOS's own layout of the low addresses it controls.</p>
+    </section>
+
+    <!-- 05 INSTRUCTION FORMAT -->
+    <section id="instr-format">
+      <div class="kicker">05 / SYSTEM</div>
+      <h2><span class="idx">§</span>Instruction encoding</h2>
+      <p>Every instruction is a fixed 8 bytes, decoded field-by-field in <code class="inline">cpu32.decode_current_ip()</code> — there is no variable-length encoding:</p>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Byte offset</th><th>Field</th><th>Size</th><th>Typical use</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0</td><td class="mono">opcode</td><td>1 B</td><td>Selects the operation. Anything not in the 1–33 range faults as <code class="inline">UnknownOpcode</code>.</td></tr>
+          <tr><td class="num">1</td><td class="mono">a</td><td>1 B</td><td>First operand — almost always a register index.</td></tr>
+          <tr><td class="num">2</td><td class="mono">b</td><td>1 B</td><td>Second operand — a register index, when the addressing mode needs one.</td></tr>
+          <tr><td class="num">3–4</td><td class="mono">imm16</td><td>2 B</td><td>16-bit immediate, used directly by port and 16-bit ops.</td></tr>
+          <tr><td class="num">5–6</td><td class="mono">extra</td><td>2 B</td><td>Combined with <span class="mono">imm16</span> to form a 32-bit immediate.</td></tr>
+          <tr><td class="num">7</td><td class="mono">flags</td><td>1 B</td><td>Selects the addressing-mode variant for opcodes that support more than one.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>The 32-bit immediate used by most opcodes is built as <code class="inline">imm32 = (extra &lt;&lt; 16) | imm16</code> — the code comments call this "little endian" combination of the two halves. <span class="mono">imm16</span> is also read on its own for the port number in <code class="inline">out</code>/<code class="inline">in</code> when their flag selects immediate-port mode.</p>
+      <div class="callout">
+        <span class="lbl">ASSEMBLER NOT INCLUDED</span>
+        The provided sources are the CPU's Python implementation and the BIOS's <code class="inline">.x32</code> assembly <i>source</i> — not the assembler that turns mnemonics like <code class="inline">wb [r10], r3</code> into these eight raw bytes. Everything about opcode <i>numbers</i> and their <i>runtime behavior</i> below comes straight from <code class="inline">Emulator.py</code>; the exact bit-packing an assembler would choose for each operand isn't something these files define.
+      </div>
+    </section>
+
+    <!-- 06 OPCODES -->
+    <section id="opcodes">
+      <div class="kicker">06 / SYSTEM</div>
+      <h2><span class="idx">§</span>Instruction set</h2>
+      <p>33 opcodes are defined, numbered 1–33 (<code class="inline">0x01</code>–<code class="inline">0x21</code>). The mnemonic column shows the assembly form as it actually appears in <code class="inline">bios.x32</code>; where the BIOS never uses an opcode, only its Python constant name is shown.</p>
+
+      <div class="table-wrap">
+      <table>
+        <caption>Full opcode table (Emulator.py::cpu32.opcodes)</caption>
+        <thead><tr><th>#</th><th>Hex</th><th>Constant</th><th>Mnemonic</th><th>Behavior</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="mono">01</td><td class="mono">OPCODE_HALT</td><td class="mono">hlt</td><td>Spins calling <code class="inline">interrupt_tick()</code> until a hardware interrupt fires, then falls through. Effectively "wait for interrupt", not a true stop.</td></tr>
+          <tr><td class="num">2</td><td class="mono">02</td><td class="mono">OPCODE_LOAD_IMM32</td><td class="mono">ldi reg, imm32</td><td>Loads the 32-bit immediate into a register.</td></tr>
+          <tr><td class="num">3</td><td class="mono">03</td><td class="mono">OPCODE_INDIR_JUMP</td><td class="mono">jmp</td><td>flags 0: jump to imm32. flags 1: jump to the address held in register <span class="mono">a</span>.</td></tr>
+          <tr><td class="num">4</td><td class="mono">04</td><td class="mono">OPCODE_ADD</td><td class="mono">add</td><td>flags 0: <span class="mono">a += b</span> (register). flags 1: <span class="mono">a += imm32</span>.</td></tr>
+          <tr><td class="num">5</td><td class="mono">05</td><td class="mono">OPCODE_SUB</td><td class="mono">sub</td><td>flags 0: <span class="mono">a -= b</span>. flags 1: <span class="mono">a -= imm32</span>.</td></tr>
+          <tr><td class="num">6</td><td class="mono">06</td><td class="mono">OPCODE_DIV</td><td class="mono">div <i>(inferred)</i></td><td>flags 0: <span class="mono">a //= b</span> (integer division). flags 1: <span class="mono">a //= imm32</span>.</td></tr>
+          <tr><td class="num">7</td><td class="mono">07</td><td class="mono">OPCODE_MUL</td><td class="mono">mul</td><td>flags 0: <span class="mono">a *= b</span>. flags 1: <span class="mono">a *= imm32</span>.</td></tr>
+          <tr><td class="num">8</td><td class="mono">08</td><td class="mono">OPCODE_COMPARE</td><td class="mono">cmp</td><td>flags 0: compares register <span class="mono">a</span> to register <span class="mono">b</span>. flags 1: compares register <span class="mono">a</span> to imm32. Sets EQ/LO/HI.</td></tr>
+          <tr><td class="num">9</td><td class="mono">09</td><td class="mono">OPCODE_INDIR_JUMP_EQ</td><td class="mono">je</td><td>Jumps to imm32 if <span class="mono">EQ</span> is set.</td></tr>
+          <tr><td class="num">10</td><td class="mono">0A</td><td class="mono">OPCODE_INDIR_JUMP_NE</td><td class="mono">jne</td><td>Jumps to imm32 if <span class="mono">EQ</span> is clear.</td></tr>
+          <tr><td class="num">11</td><td class="mono">0B</td><td class="mono">OPCODE_INDIR_JUMP_HI</td><td class="mono">jhi <i>(inferred)</i></td><td>Jumps to imm32 if <span class="mono">HI</span> is set.</td></tr>
+          <tr><td class="num">12</td><td class="mono">0C</td><td class="mono">OPCODE_INDIR_JUMP_LO</td><td class="mono">jlo <i>(inferred)</i></td><td>Jumps to imm32 if <span class="mono">LO</span> is set.</td></tr>
+          <tr><td class="num">13</td><td class="mono">0D</td><td class="mono">OPCODE_INDIR_COPY_DATA</td><td class="mono">mov</td><td>32-bit move, four addressing modes — see below.</td></tr>
+          <tr><td class="num">14</td><td class="mono">0E</td><td class="mono">OPCODE_WRITE_BYTE</td><td class="mono">wb</td><td>Writes the low 8 bits of a register to memory. flags 0: address is imm32. flags 1: address is held in register <span class="mono">b</span>.</td></tr>
+          <tr><td class="num">15</td><td class="mono">0F</td><td class="mono">OPCODE_WRITE_WORD</td><td class="mono">ww <i>(inferred)</i></td><td>Same as <span class="mono">wb</span> but writes the low 16 bits.</td></tr>
+          <tr><td class="num">16</td><td class="mono">10</td><td class="mono">OPCODE_READ_BYTE</td><td class="mono">rb</td><td>Reads a byte into a register. flags 0: address is imm32. flags 1: address is held in register <span class="mono">b</span>.</td></tr>
+          <tr><td class="num">17</td><td class="mono">11</td><td class="mono">OPCODE_READ_WORD</td><td class="mono">rw <i>(inferred)</i></td><td>Same as <span class="mono">rb</span> but reads 16 bits.</td></tr>
+          <tr><td class="num">18</td><td class="mono">12</td><td class="mono">OPCODE_MOVE_STACK</td><td class="mono">ssp</td><td>flags 0: <span class="mono">sp = imm32</span>. flags 1: <span class="mono">sp = reg a</span>.</td></tr>
+          <tr><td class="num">19</td><td class="mono">13</td><td class="mono">OPCODE_PUSH</td><td class="mono">push <i>(inferred)</i></td><td>flags 0: pushes imm32. flags 1: pushes register <span class="mono">a</span>.</td></tr>
+          <tr><td class="num">20</td><td class="mono">14</td><td class="mono">OPCODE_POP</td><td class="mono">pop <i>(inferred)</i></td><td>Pops the stack into register <span class="mono">a</span>.</td></tr>
+          <tr><td class="num">21</td><td class="mono">15</td><td class="mono">OPCODE_CALL</td><td class="mono">call</td><td>Pushes the current IP, then jumps to imm32.</td></tr>
+          <tr><td class="num">22</td><td class="mono">16</td><td class="mono">OPCODE_RET</td><td class="mono">ret</td><td>Pops the stack into IP.</td></tr>
+          <tr><td class="num">23</td><td class="mono">17</td><td class="mono">OPCODE_SOFTWARE_INTERRUPT</td><td class="mono">int imm</td><td>Traps to IVT vector <span class="mono">a × 4</span>, saving registers and IP first. See <a href="#interrupts">§08</a>.</td></tr>
+          <tr><td class="num">24</td><td class="mono">18</td><td class="mono">OPCODE_SOFTWARE_INTERRUPT_RETURN</td><td class="mono">iret</td><td>Pops IP off the stack and restores r0–r23 from the interrupt-entry snapshot.</td></tr>
+          <tr><td class="num">25</td><td class="mono">19</td><td class="mono">OPCODE_PORT_OUT</td><td class="mono">out</td><td>Writes register <span class="mono">a</span> to a port, then immediately polls every non-interrupt device. flags 0: port number in register <span class="mono">b</span>. flags 1: port number is imm16.</td></tr>
+          <tr><td class="num">26</td><td class="mono">1A</td><td class="mono">OPCODE_PORT_IN</td><td class="mono">in</td><td>Reads a port into register <span class="mono">a</span>. flags 0: port number in register <span class="mono">b</span>. flags 1: port number is imm16.</td></tr>
+          <tr><td class="num">27</td><td class="mono">1B</td><td class="mono">OPCODE_CLIF</td><td class="mono">cli</td><td>Clears IF (disables hardware interrupt delivery).</td></tr>
+          <tr><td class="num">28</td><td class="mono">1C</td><td class="mono">OPCODE_SLIF</td><td class="mono">sti</td><td>Sets IF (enables hardware interrupt delivery).</td></tr>
+          <tr><td class="num">29</td><td class="mono">1D</td><td class="mono">OPCODE_XOR</td><td class="mono">xor</td><td><span class="mono">a ^= b</span>. Commonly used to zero a register (<code class="inline">xor r0, r0</code>).</td></tr>
+          <tr><td class="num">30</td><td class="mono">1E</td><td class="mono">OPCODE_AND</td><td class="mono">and <i>(inferred)</i></td><td><span class="mono">a &amp;= b</span>.</td></tr>
+          <tr><td class="num">31</td><td class="mono">1F</td><td class="mono">OPCODE_NOT</td><td class="mono">not <i>(inferred)</i></td><td><span class="mono">a = ~a</span>, masked to 32 bits.</td></tr>
+          <tr><td class="num">32</td><td class="mono">20</td><td class="mono">OPCODE_COPY_REGISTER</td><td class="mono">— <i>(unconfirmed)</i></td><td>Copies register <span class="mono">b</span> into register <span class="mono">a</span> (register-to-register, no memory access — distinct from <span class="mono">mov</span>).</td></tr>
+          <tr><td class="num">33</td><td class="mono">21</td><td class="mono">OPCODE_CLEAR_FLAGS</td><td class="mono">clf</td><td>Clears EQ/HI/LO. Leaves IF untouched.</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h3><span class="mono">mov</span> addressing modes</h3>
+      <p><span class="mono">OPCODE_INDIR_COPY_DATA</span> is the one instruction with four distinct flag variants, all 32-bit:</p>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>flags</th><th>Direction</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0</td><td>register → memory</td><td>Writes register <span class="mono">a</span> to the fixed address imm32.</td></tr>
+          <tr><td class="num">1</td><td>memory → register</td><td>Reads the dword at fixed address imm32 into register <span class="mono">a</span>.</td></tr>
+          <tr><td class="num">2</td><td>[register] → register</td><td>Reads the dword at the address held in register <span class="mono">a</span> into register <span class="mono">b</span>.</td></tr>
+          <tr><td class="num">3</td><td>register → [register]</td><td>Writes register <span class="mono">a</span> to the address held in register <span class="mono">b</span>.</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h3>Example: BIOS code using several of these together</h3>
+      <div class="code-block">
+        <div class="code-cap"><span>bios.x32 — keyboard.read_cursor</span><button onclick="copyBlock(this)">Copy</button></div>
+        <pre><code>keyboard.read_cursor:
+  ldi r9, KEYBOARD_BUFFER_CURSOR_ADDRESS
+  rb r10, [r9]
+
+  ldi r9, KEYBOARD_BUFFER_BASE
+  add r10, r9
+
+  ret</code></pre>
+      </div>
+      <p>This loads the address of the one-byte cursor, reads it, then adds the keyboard buffer's base address to turn the relative cursor into an absolute address — returned in <span class="mono">r10</span>.</p>
+    </section>
+
+    <!-- 07 EXCEPTIONS -->
+    <section id="exceptions">
+      <div class="kicker">07 / SYSTEM</div>
+      <h2><span class="idx">§</span>Exceptions &amp; faults</h2>
+      <p>CPU-level faults are handled entirely inside <code class="inline">cpu32.step()</code>: a Python exception raised anywhere during decode or execute is caught, mapped to a numeric ISR id, and turned into what is effectively a synthetic interrupt — the same save-and-jump mechanism used for hardware and software interrupts (see <a href="#interrupts">§08</a>). Firmware can install a handler for any of these the same way it installs a keyboard handler.</p>
+      <div class="table-wrap">
+      <table>
+        <caption>Exception → IVT vector mapping (Emulator.py::cpu32.EXCEPTION_DISPATCH_TABLE)</caption>
+        <thead><tr><th>Python exception</th><th>ISR id</th><th>IVT address</th><th>Raised when</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">MemoryViolation</td><td class="num">58</td><td class="addr">0x000000E8</td><td>Defined in the dispatch table but never raised anywhere in the provided source — reserved for future use.</td></tr>
+          <tr><td class="mono">UnknownError</td><td class="num">59</td><td class="addr">0x000000EC</td><td>Fallback used for any exception type not otherwise in the table.</td></tr>
+          <tr><td class="mono">InvalidMemoryWrite</td><td class="num">60</td><td class="addr">0x000000F0</td><td>Any memory access (read or write) past <code class="inline">0x0FFFFFFF</code>.</td></tr>
+          <tr><td class="mono">InvalidRegister</td><td class="num">61</td><td class="addr">0x000000F4</td><td>A register index outside 0–23.</td></tr>
+          <tr><td class="mono">InvalidOpcodeError.InvalidFlags</td><td class="num">62</td><td class="addr">0x000000F8</td><td>An opcode's <span class="mono">flags</span> byte doesn't match any of its defined addressing modes.</td></tr>
+          <tr><td class="mono">InvalidOpcodeError.UnknownOpcode</td><td class="num">63</td><td class="addr">0x000000FC</td><td>The fetched opcode byte isn't 1–33.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>On a fault, before jumping: the ISR id is written to <span class="mono">r0</span> and the faulting instruction's address is written to <span class="mono">r1</span> — a handler can inspect both to decide what happened and where.</p>
+      <div class="callout">
+        <span class="lbl">TWO SEPARATE ERROR SYSTEMS</span>
+        Don't confuse the in-VM fault mechanism above with the host-level dialogs in <code class="inline">Exceptions.warning_window()</code> and <code class="inline">System.error_window()</code>. Those call the Windows <code class="inline">MessageBoxW</code> API directly and are only used for conditions the emulator itself can't recover from — a missing BIOS file, a missing or wrongly-sized disk image, or an unhandled Python exception in the emulator's own runtime loop. Either dismisses the dialog and then exits the whole process.
+      </div>
+    </section>
+
+    <!-- 08 INTERRUPTS -->
+    <section id="interrupts">
+      <div class="kicker">08 / SYSTEM</div>
+      <h2><span class="idx">§</span>Interrupts</h2>
+      <p>All three interrupt sources — hardware, software, and CPU exceptions — funnel through the same <code class="inline">setup_interrupt_environment()</code> routine: save all 24 registers to the shadow copy, push the current IP onto the stack, then load IP from the target IVT slot.</p>
+
+      <h3>Hardware interrupts (keyboard)</h3>
+      <p><code class="inline">SuperIO.InterruptHandler</code> runs a dedicated Python thread that polls the keyboard roughly every millisecond using <code class="inline">msvcrt.kbhit()</code>/<code class="inline">getch()</code>. On a keypress it writes the key's value to the keyboard port (<span class="mono">0x4B</span>) and flags <span class="mono">interrupt_ready</span>. The CPU only actually notices on the next call to <code class="inline">interrupt_tick()</code> — invoked once per <code class="inline">step()</code> in the main loop — and only if <span class="mono">IF</span> is set. This makes hardware interrupt latency roughly one CPU cycle plus up to ~1ms of polling jitter, not immediate.</p>
+      <div class="callout">
+        <span class="lbl">A DOCUMENTED RACE, ALREADY FIXED</span>
+        A comment in <code class="inline">interrupts.keyboard</code> describes a real bug that was hit during development: a <code class="inline">sti; hlt</code> wait-for-input loop could hang forever if interrupts got disabled inside the handler and never re-enabled before returning. The fix is that the keyboard ISR explicitly re-runs <code class="inline">sti</code> right before <code class="inline">iret</code>, since it can only ever be entered while interrupts were already on.
+      </div>
+
+      <h3>Software interrupts</h3>
+      <p>The <code class="inline">int</code> opcode always fires immediately, regardless of <span class="mono">IF</span> — interrupt masking only affects hardware delivery. <code class="inline">int 0x05</code>, for example, computes vector <span class="mono">5 × 4 = 0x14</span> and jumps to whatever address is stored there.</p>
+
+      <h3>Returning</h3>
+      <p><code class="inline">iret</code> pops IP from the stack and restores r0–r23 from the pre-interrupt snapshot. It does <i>not</i> restore SP or the flag register — a handler that leaves the stack imbalanced, or that changes EQ/HI/LO and doesn't clear them back, will leak that state into whatever resumes.</p>
+    </section>
+
+    <!-- 09 PORTS -->
+    <section id="ports">
+      <div class="kicker">09 / I/O</div>
+      <h2><span class="idx">§</span>Ports &amp; devices</h2>
+      <p>256 dword-wide ports (<code class="inline">SuperIO.portio</code>) sit behind the <span class="mono">in</span>/<span class="mono">out</span> opcodes. Writing to <i>any</i> port immediately triggers <code class="inline">NonInterruptDevicesHandler.PollAllDevices()</code> — so polled devices (currently just the disk) are checked synchronously on every <span class="mono">out</span>, not on a timer.</p>
+      <div class="table-wrap">
+      <table>
+        <caption>Defined ports (SuperIO.py::PORTs)</caption>
+        <thead><tr><th>Port</th><th>Name</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="addr">0x00</td><td class="mono">STORAGE_STATUS_NOTIFY_PORT</td><td>Set to <span class="mono">1</span> to trigger the disk operation currently configured on the other disk ports; the BIOS resets it to <span class="mono">0</span> immediately after.</td></tr>
+          <tr><td class="addr">0x4B</td><td class="mono">KB_PORT</td><td>Holds the most recent key code written by the keyboard hardware handler.</td></tr>
+          <tr><td class="addr">0xEA</td><td class="mono">STORAGE_SECTOR_PORT</td><td>Sector number for the pending disk operation.</td></tr>
+          <tr><td class="addr">0xEB</td><td class="mono">STORAGE_ADDRESS_PORT</td><td>Memory address to read into / write from.</td></tr>
+          <tr><td class="addr">0xEC</td><td class="mono">STORAGE_STORAGE_MODE</td><td><span class="mono">1</span> = read from disk into memory, <span class="mono">2</span> = write from memory to disk.</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h3>Disk device protocol</h3>
+      <p><code class="inline">NonInterruptThreadDevices.Disk.poll()</code> implements the other end of the four disk ports. Its logic on every poll:</p>
+      <ol>
+        <li>If <code class="inline">VM_DISK/vmdisk.img</code> doesn't exist, show a fatal warning dialog and stop (this returns without raising a CPU-visible fault — it's a host-level problem).</li>
+        <li>If the status port isn't set or the mode isn't 1 or 2, do nothing.</li>
+        <li><b>Mode 1 (read):</b> if the requested sector is within <code class="inline">DISK_END_SECTOR</code> (524288), seek to <span class="mono">sector × 1024</span>, read 1024 bytes, and copy them byte-by-byte into memory starting at the address port's value.</li>
+        <li><b>Mode 2 (write):</b> reads 1024 bytes out of memory at the address port's value, seeks to the same sector offset, and overwrites that sector on disk.</li>
+      </ol>
+      <p>This gives a 512&nbsp;MB disk (<code class="inline">524288</code> sectors × <code class="inline">1024</code> bytes), matching the exact size the emulator checks for at startup.</p>
+      <div class="callout warn">
+        <span class="lbl">SYNCHRONOUS AND BLOCKING</span>
+        Disk I/O happens inline, inside whatever thread called <code class="inline">PollAllDevices()</code> — normally the CPU's own execution thread, triggered by an <span class="mono">out</span> instruction. A slow or failing disk read stalls CPU execution for the duration of the file operation.
+      </div>
+    </section>
+
+    <!-- 10 VIDEO -->
+    <section id="video">
+      <div class="kicker">10 / I/O</div>
+      <h2><span class="idx">§</span>Video &amp; console</h2>
+      <p>There's no real display hardware — video memory (<span class="mono">0x0B800000</span>–<span class="mono">0x0B800FFF</span>, 4096 bytes) is just a byte buffer that a background thread translates directly into terminal output, roughly 30 times a second (<code class="inline">time.sleep(0.03333)</code> between frames, and only when the frame content actually changed).</p>
+      <div class="table-wrap">
+      <table>
+        <caption>Video byte encoding (Emulator.py::spawn_refresh_thread)</caption>
+        <thead><tr><th>Byte value</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0</td><td>End of frame — the refresh thread stops scanning here.</td></tr>
+          <tr><td class="num">10, 32–126</td><td>Printed as the literal ASCII character (10 is line feed).</td></tr>
+          <tr><td class="num">130</td><td>Switches to <span style="color:var(--red)">RED</span> for subsequent characters.</td></tr>
+          <tr><td class="num">131</td><td>Switches to <span style="color:var(--green)">GREEN</span>.</td></tr>
+          <tr><td class="num">132</td><td>Switches to BLUE.</td></tr>
+          <tr><td class="num">133</td><td>Switches to BRIGHT_BLACK (dim gray).</td></tr>
+          <tr><td class="num">134</td><td>Switches to <span style="color:var(--cyan)">CYAN</span>.</td></tr>
+          <tr><td class="num">135</td><td>Switches to a red background.</td></tr>
+          <tr><td class="num">136</td><td>Resets to the terminal's default color.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>Color codes are in-band — they consume a byte position in the buffer just like a printed character, they simply don't produce visible output themselves. Every BIOS string in the string pool opens with one of these codes (usually <span class="mono">133</span> for status text or <span class="mono">132</span> for the banner).</p>
+      <p>The BIOS's own teletype interrupt (ISR 14) writes one character at a time to a single self-tracked cursor byte (<span class="mono">print.teletype_cursor</span>), relative to the video base — it never reads back what's already on screen, so it's purely additive until something clears the region (see <code class="inline">clear_video</code> in <a href="#bios-boot">§13</a>).</p>
+    </section>
+
+    <!-- 11 GUI -->
+    <section id="gui">
+      <div class="kicker">11 / I/O</div>
+      <h2><span class="idx">§</span>Live debugger GUI</h2>
+      <p>A Tkinter window (<code class="inline">System.py::GUI</code>) runs on its own thread, started right before the main run loop, and gives a live view into CPU state without pausing execution.</p>
+      <div class="filegrid">
+        <div class="filecard"><span class="fn">Registers panel</span><p>All 24 general registers in hex, each flashing white for one refresh tick (66ms) when its value changes since the last redraw.</p></div>
+        <div class="filecard"><span class="fn">IP / SP</span><p>Current instruction pointer and stack pointer, always visible.</p></div>
+        <div class="filecard"><span class="fn">Flags</span><p>EQ / HI / LO / IF shown as filled or hollow dots.</p></div>
+        <div class="filecard"><span class="fn">Stack peek</span><p>8 dwords above and below SP, auto-redrawn whenever SP moves, with the row containing SP highlighted.</p></div>
+        <div class="filecard"><span class="fn">Memory / hex view</span><p>A scrollable hex+ASCII dump of a user-chosen address range (capped at 16KB), with quick-jump buttons for the IVT, video memory, current IP, current SP, and page-forward navigation.</p></div>
+        <div class="filecard"><span class="fn">Clock &amp; cycles</span><p>Sampled every 250ms from <code class="inline">cpu32.current_cycle</code> and formatted as Hz / kHz / MHz, alongside a raw running cycle count.</p></div>
+      </div>
+      <p>"Follow IP" auto-recenters the hex view as execution moves; toggling it off (or manually editing the address range) freezes the view where you left it. "Pause View" only stops the GUI's own redraw timers — it has no effect on the CPU thread, which keeps running at full speed underneath.</p>
+    </section>
+
+    <!-- 12 BIOS MEMORY LAYOUT -->
+    <section id="bios-map">
+      <div class="kicker">12 / FIRMWARE</div>
+      <h2><span class="idx">§</span>BIOS memory layout</h2>
+      <p>The BIOS ROM is loaded flat at address zero and is 21&nbsp;KiB on disk. Everything below is a convention the BIOS source documents in its own header comments — the CPU doesn't know or enforce any of it.</p>
+      <div class="memmap">
+        <div class="memrow"><div class="addr">0000 0000<br>– 0000 1009</div><div class="desc">Reset vector region. Address zero holds a single <span class="mono">jmp 0x0000100A</span>; real BIOS code starts just after.</div></div>
+        <div class="memrow"><div class="addr">0000 100A<br>– 0000 5400</div><div class="desc"><b>BIOS code</b>, including all interrupt service routines.</div></div>
+        <div class="memrow"><div class="addr">0000 5400<br>– 0000 5BAA</div><div class="desc"><b>BIOS stack</b> — temporary, used only during early boot before the kernel stack exists. Not enforced by hardware.</div></div>
+        <div class="memrow"><div class="addr">0000 5C00<br>– 0000 6000</div><div class="desc"><b>Boot sector</b> — sector 0 of the disk is read here by <code class="inline">do_boot</code>.</div></div>
+        <div class="memrow"><div class="addr">0000 0F00<br>– 0000 0FFF</div><div class="desc"><b>Keyboard buffer</b> — 256 bytes, one byte per pending key.</div></div>
+        <div class="memrow"><div class="addr">0000 0EFF</div><div class="desc"><b>Keyboard buffer cursor</b> — a single byte, kept relative to the buffer's base address specifically so the offset always fits in one byte (the buffer is exactly 256 bytes long).</div></div>
+        <div class="memrow"><div class="addr">0F00 0000</div><div class="desc"><b>Kernel-space stack</b> — where the BIOS moves SP to just before jumping into the boot sector.</div></div>
+      </div>
+
+      <h3>Boot Sector Header (BSH)</h3>
+      <p>The boot sector loaded to <span class="mono">0x5C00</span> is expected to follow a fixed layout:</p>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Address range</th><th>Field</th></tr></thead>
+        <tbody>
+          <tr><td class="addr">5C00 – 5C01</td><td>Boot signature — must be exactly <span class="mono">0x55 0xAA</span>.</td></tr>
+          <tr><td class="addr">5C02 – 5C35</td><td>Null-terminated OS name string (52 bytes), printed by the BIOS on a successful boot.</td></tr>
+          <tr><td class="addr">5C40 – 6000</td><td>Boot code — must start and end within this window; this is the exact address the BIOS jumps to.</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- 13 BOOT SEQUENCE -->
+    <section id="bios-boot">
+      <div class="kicker">13 / FIRMWARE</div>
+      <h2><span class="idx">§</span>Boot sequence</h2>
+      <p>Tracing execution from power-on:</p>
+
+      <div class="code-block">
+        <div class="code-cap"><span>bios.x32 — reset vector</span><button onclick="copyBlock(this)">Copy</button></div>
+        <pre><code>region 0x00000000
+jmp 0x0000100A
+
+region 0x0000100A
+cli                    ; Interrupts wont work this early
+clf                    ; Clear flags
+ssp BIOS_STACK_BASE    ; Setup early BIOS stack
+jmp bios_entp</code></pre>
+      </div>
+
+      <ol>
+        <li><b>Reset vector.</b> Address zero jumps straight past itself to <span class="mono">0x0000100A</span>, disables interrupts (nothing is installed in the IVT yet), clears flags, and sets up a temporary stack.</li>
+        <li><b><span class="mono">bios_entp</span>.</b> Initializes the teletype cursor, prints the BIOS banner, then calls <span class="mono">setup_devices</span> and <span class="mono">setup_interrupts</span>.</li>
+        <li><b><span class="mono">setup_devices</span></b> currently only initializes the keyboard: zeroes the cursor byte and wipes the 256-byte buffer.</li>
+        <li><b><span class="mono">setup_interrupts</span></b> installs five handler addresses into the IVT — see the table in <a href="#bios-abi">§14</a>.</li>
+        <li>A long pause (a manual busy-wait loop, twice), purely so boot messages are readable.</li>
+        <li><b><span class="mono">do_boot</span></b> issues a disk-read software interrupt for sector 0 into <span class="mono">0x5C00</span>, then checks the two boot-signature bytes.</li>
+      </ol>
+
+      <div class="code-block">
+        <div class="code-cap"><span>bios.x32 — do_boot (signature check)</span><button onclick="copyBlock(this)">Copy</button></div>
+        <pre><code>ldi r0, BOOT_SECTOR_LOAD_ADDRESS
+rb  r1, [r0]
+cmp r1, 0x55
+jne do_boot.bad_sig
+
+add r0, 1
+rb  r1, [r0]
+cmp r1, 0xAA
+jne do_boot.bad_sig</code></pre>
+      </div>
+
+      <p>On a <b>bad signature</b>: prints <i>"Boot Failed: Not a bootable disk."</i> and returns to <span class="mono">bios_entp</span>, which falls through to an infinite halt loop (<span class="mono">die: cli; hlt; jmp die</span>) — the machine sits parked, waiting for nothing, since interrupts were just disabled.</p>
+
+      <p>On a <b>good signature</b>: prints the OS name string found at <span class="mono">0x5C02</span>, pauses again, clears the video buffer, zeroes all 24 general registers, moves the stack pointer to the kernel-space stack at <span class="mono">0x0F000000</span>, and jumps to <span class="mono">0x00005C40</span> — the boot sector's own entry point. From here the BIOS has fully handed off control; only its installed interrupt handlers remain reachable.</p>
+    </section>
+
+    <!-- 14 BIOS ABI -->
+    <section id="bios-abi">
+      <div class="kicker">14 / FIRMWARE</div>
+      <h2><span class="idx">§</span>BIOS interrupt ABI</h2>
+      <p>IVT ids 5–20 are reserved by convention for BIOS-provided services; id 1 is the hardware keyboard vector. Four software services and one hardware handler are actually implemented:</p>
+      <div class="table-wrap">
+      <table>
+        <caption>Installed by bios.x32::setup_interrupts</caption>
+        <thead><tr><th>ISR id</th><th>Vector</th><th>Service</th><th>Registers in</th><th>Trigger</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="addr">0x04</td><td>Keyboard</td><td>—</td><td>Hardware, fired by the emulator when a key is pressed and IF is set. Not meant to be invoked with <span class="mono">int</span>.</td></tr>
+          <tr><td class="num">5</td><td class="addr">0x14</td><td>Disk read</td><td><span class="mono">r0</span> = sector, <span class="mono">r1</span> = destination address</td><td><span class="mono">int 0x05</span></td></tr>
+          <tr><td class="num">6</td><td class="addr">0x18</td><td>Disk write</td><td><span class="mono">r0</span> = sector, <span class="mono">r1</span> = source address</td><td><span class="mono">int 0x06</span></td></tr>
+          <tr><td class="num">10</td><td class="addr">0x28</td><td>Clear keyboard buffer</td><td>—</td><td><span class="mono">int 0x0A</span></td></tr>
+          <tr><td class="num">14</td><td class="addr">0x38</td><td>Teletype (print one character)</td><td><span class="mono">r0</span> = ASCII code</td><td><span class="mono">int 0x0E</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="code-block">
+        <div class="code-cap"><span>bios.x32 — interrupts.disk_read</span><button onclick="copyBlock(this)">Copy</button></div>
+        <pre><code>interrupts.disk_read:
+  ldi r2, 0
+  out r2, 0x00      ; clear the status port first
+
+  ldi r2, 1
+  out r2, 0xEC      ; mode = read
+
+  out r0, 0xEA      ; sector
+  out r1, 0xEB      ; destination address
+
+  ldi r2, 1
+  out r2, 0x00      ; notify — this out triggers the actual disk poll
+
+  ldi r2, 0
+  out r2, 0x00      ; clear the status port again
+
+  iret</code></pre>
+      </div>
+      <p>Every disk service follows the same four-port handshake: clear status, set mode, set sector and address, then pulse the status port to <span class="mono">1</span> — since <i>any</i> <span class="mono">out</span> instruction triggers a device poll, this last write is what actually causes <code class="inline">NonInterruptThreadDevices.Disk.poll()</code> to perform the transfer synchronously before <span class="mono">iret</span> runs.</p>
+    </section>
+
+    <!-- 15 SSFS -->
+    <section id="ssfs">
+      <div class="kicker">15 / STORAGE</div>
+      <h2><span class="idx">§</span>SSFS — the disk filesystem</h2>
+      <p>SSFS is a deliberately minimal, flat file format for the virtual disk. There's no free-space map, no subdirectories, no timestamps and no permissions — just a name, a starting sector, and a length.</p>
+
+      <h3>Layout</h3>
+      <ul>
+        <li>Sector size: <b>1024 bytes</b>, matching <code class="inline">Vars.DISK_SECTOR_SIZE</code>.</li>
+        <li>The entire directory lives in a single fixed sector: <b>sector 4</b> (byte offset 4096–5119 of the image).</li>
+        <li>The directory holds up to <b>34 file entries</b>, each exactly <b>30 bytes</b>.</li>
+        <li>Sector 0 is reserved separately, outside SSFS's own bookkeeping, as the BIOS boot sector (see <a href="#bios-map">§12</a>) — SSFS's reader makes no special case for it, so a filesystem entry could theoretically claim it too if something wrote one there.</li>
+      </ul>
+
+      <h3>Directory entry format (30 bytes)</h3>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Offset</th><th>Size</th><th>Field</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0</td><td>1 B</td><td><span class="mono">0xFE</span> — file-entry magic byte. The reader scans byte-by-byte for this to find the next entry.</td></tr>
+          <tr><td class="num">1</td><td>4 B</td><td>Start sector (little-endian dword).</td></tr>
+          <tr><td class="num">5</td><td>4 B</td><td>Length, in sectors (little-endian dword).</td></tr>
+          <tr><td class="num">9</td><td>1 B</td><td><span class="mono">0xFD</span> — filename-descriptor magic. If this byte isn't <span class="mono">0xFD</span> right after the length field, the reader treats the directory as corrupt and aborts.</td></tr>
+          <tr><td class="num">10</td><td>20 B</td><td>ASCII filename, NUL-padded to 20 bytes.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>The reader (<code class="inline">read_by_sector</code> in <code class="inline">ssfs.py</code>) walks the 1024-byte metadata sector looking for <span class="mono">0xFE</span> bytes; any byte that isn't a file-entry magic is skipped one at a time. It stops at the end of the sector, and reports a corrupt read if a length field isn't immediately followed by the name magic.</p>
+      <div class="callout">
+        <span class="lbl">FILE SIZE VS. SECTOR LENGTH</span>
+        The reported <code class="inline">_size</code> for a file is always <code class="inline">sectors × 1024</code> — a whole number of sectors. SSFS has no concept of a file's exact byte length within its final sector; anything reading a file has to know (or not care) where the real content ends inside that last 1024-byte block.
+      </div>
+    </section>
+
+    <!-- 16 SSFS TOOL -->
+    <section id="ssfs-tool">
+      <div class="kicker">16 / STORAGE</div>
+      <h2><span class="idx">§</span>ssfs.py — command-line reader</h2>
+      <p><code class="inline">ssfs.py</code> is a standalone, host-side tool — it reads a <code class="inline">.img</code> file directly with plain Python file I/O and has no dependency on the emulator process. It's how you inspect a disk image from outside the VM, independent of the BIOS's own disk-read interrupt.</p>
+
+      <div class="code-block">
+        <div class="code-cap"><span>usage</span><button onclick="copyBlock(this)">Copy</button></div>
+        <pre><code>python ssfs.py ls   &lt;imagepath&gt;
+python ssfs.py read &lt;imagepath&gt; &lt;filename&gt; &lt;ascii|hex&gt;</code></pre>
+      </div>
+
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th>Behavior</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">ls &lt;imagepath&gt;</td><td>Reads the directory sector and prints every file's name, size in bytes, and its sector range (<span class="mono">start</span>–<span class="mono">end</span>).</td></tr>
+          <tr><td class="mono">read &lt;imagepath&gt; &lt;name&gt; ascii</td><td>Prints the file's raw bytes as characters via <code class="inline">chr()</code> — best for text files; non-printable bytes will still print whatever <code class="inline">chr()</code> produces.</td></tr>
+          <tr><td class="mono">read &lt;imagepath&gt; &lt;name&gt; hex</td><td>Prints the file's raw bytes as two-digit hex pairs, wrapped every 30 bytes per line.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>An unrecognized read type silently falls back to <span class="mono">ascii</span>. Looking up a filename that isn't in the directory, or an image path that doesn't exist, prints an error and exits with status <span class="mono">1</span> or <span class="mono">2</span> respectively.</p>
+    </section>
+
+    <!-- 17 CONFIG -->
+    <section id="config">
+      <div class="kicker">17 / REFERENCE</div>
+      <h2><span class="idx">§</span>Configuration (Vars.py)</h2>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Constant</th><th>Value</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">DISK_PATH_RELATIVE</td><td class="mono">VM_DISK/vmdisk.img</td><td>The virtual disk image the disk device reads and writes.</td></tr>
+          <tr><td class="mono">BIOS_PATH_RELATIVE</td><td class="mono">VM_BIOS/bios.rom</td><td>The assembled BIOS binary loaded at address 0 on startup.</td></tr>
+          <tr><td class="mono">DUMP_PATH_RELATIVE</td><td class="mono">M_DUMP/dump.bin</td><td>Destination for the full-memory dump written on shutdown, if this file already exists.</td></tr>
+          <tr><td class="mono">DISK_SECTOR_SIZE</td><td class="mono">1024</td><td>Bytes per sector — shared by the disk device and SSFS.</td></tr>
+          <tr><td class="mono">DISK_END_SECTOR</td><td class="mono">524288</td><td>Sector count ceiling for reads/writes (524288 × 1024 = 512 MB).</td></tr>
+          <tr><td class="mono">LOG_FILE</td><td class="mono">EmuLog/log.txt</td><td>Declared, but not referenced anywhere else in the provided source — no code currently writes to it.</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- 18 SHUTDOWN -->
+    <section id="shutdown">
+      <div class="kicker">18 / REFERENCE</div>
+      <h2><span class="idx">§</span>Shutdown &amp; memory dumps</h2>
+      <p>Shutdown can be triggered three ways: <kbd>Ctrl+C</kbd> during the run loop, an unhandled Python exception during the run loop (shown in a "Guru Meditation"-style error dialog with the exception type, a stack trace, and the current IP/flags), or a fatal startup check failing (missing BIOS, missing disk, wrong disk size).</p>
+      <p><code class="inline">Emulator.Shutdown()</code> then, in order:</p>
+      <ol>
+        <li>Prints final register values, IP, SP, flags, and total cycle count to the console.</li>
+        <li>If <code class="inline">M_DUMP/dump.bin</code> already exists, overwrites it with the entire 256&nbsp;MB memory image — this is a manual, opt-in dump: the file has to already be present, it's never created automatically.</li>
+        <li>Stops the GUI thread, signals the keyboard interrupt thread to exit and joins it, then does the same for the screen-refresh thread.</li>
+        <li>Redirects <code class="inline">stdout</code>/<code class="inline">stderr</code> to the null device and installs a no-op <code class="inline">sys.unraisablehook</code>, specifically to suppress a lingering Tkinter error on shutdown (documented in-line as a workaround, not a design goal).</li>
+        <li>Frees the in-memory RAM array and exits the process.</li>
+      </ol>
+    </section>
+
+    <!-- 19 UTILITIES -->
+    <section id="utilities">
+      <div class="kicker">19 / REFERENCE</div>
+      <h2><span class="idx">§</span>Utility layer (Teknikality.py)</h2>
+      <p>Imported by <code class="inline">System.py</code> as <code class="inline">Emu.System.Dependencies.Teknikality</code>, this is a general-purpose helper module shared across the project rather than something specific to the CPU or BIOS. The pieces the emulator actually relies on:</p>
+      <ul>
+        <li><b>ANSI color constants</b> (<span class="mono">colors</span> class) — used for every console log line the emulator prints.</li>
+        <li><b>Cursor helpers</b> — <code class="inline">hide_cursor()</code> hides the blinking terminal caret via <code class="inline">kernel32</code> so it doesn't visually clash with the video refresh loop.</li>
+        <li><b><code class="inline">clearscreen()</code></b> — a thin cross-platform wrapper (<span class="mono">cls</span> / <span class="mono">clear</span>) used between frames and loading-bar redraws.</li>
+      </ul>
+      <p>The module also contains a much larger set of general-purpose pieces not exercised by the emulator's own boot/run path: a small numeric/string helper library (<span class="mono">numbertools</span>, <span class="mono">stringtools</span>), a console progress bar (<span class="mono">Dynamic_Loading_Bar</span>), a toy cooperative task runner (<span class="mono">EasyThreadMultitasking</span>), a custom pseudo-random generator seeded from a continuously-reseeding background thread (<span class="mono">_Ran</span>), and a handful of standalone novelty functions (randomized fake system-error message generators, and two intentionally destructive "prank" routines that tear down the Python runtime's builtins) that are dead code as far as this emulator is concerned — nothing in <code class="inline">Emulator.py</code> or <code class="inline">System.py</code> calls them.</p>
+      <div class="callout warn">
+        <span class="lbl">DO NOT CALL THESE</span>
+        <code class="inline">give__arrythmia()</code> and <code class="inline">sabotage_()</code> deliberately corrupt or delete Python's own builtins and module state for comedic effect. They are unrelated to the emulator's operation and unsafe to invoke in any process you care about.
+      </div>
+    </section>
+
+    <!-- 20 FILE MAP -->
+    <section id="files">
+      <div class="kicker">20 / REFERENCE</div>
+      <h2><span class="idx">§</span>File map</h2>
+      <div class="filegrid">
+        <div class="filecard"><span class="fn">Emulator.py</span><p>Entry point. Allocates memory/registers/ports, loads the BIOS, runs the timed fetch-decode-execute loop, and owns the <code class="inline">cpu32</code> class with every opcode's behavior.</p></div>
+        <div class="filecard"><span class="fn">System.py</span><p>Low-level primitives: <code class="inline">DwordArray</code>, <code class="inline">registers</code>, <code class="inline">memory</code>, hex formatting helpers, the Windows platform check, and the Tkinter live debugger <code class="inline">GUI</code>.</p></div>
+        <div class="filecard"><span class="fn">SuperIO.py</span><p>256-port I/O bus, the threaded keyboard interrupt source, and the polled (non-interrupt) disk device.</p></div>
+        <div class="filecard"><span class="fn">Exceptions.py</span><p>CPU/emulator exception classes, plus a blocking Windows warning-dialog helper.</p></div>
+        <div class="filecard"><span class="fn">Vars.py</span><p>File paths and disk/sector size constants shared across modules.</p></div>
+        <div class="filecard"><span class="fn">ssfs.py</span><p>Host-side reader/CLI for the SSFS disk format — independent of the running emulator.</p></div>
+        <div class="filecard"><span class="fn">bios.x32</span><p>BIOS source in VSK-32 assembly: boot, interrupt handlers, teletype, disk, keyboard. Assembled separately into <code class="inline">bios.rom</code>.</p></div>
+        <div class="filecard"><span class="fn">Teknikality.py</span><p>Shared utility toolkit (colors, small helpers, a loading bar, a task runner) plus unrelated novelty code not used by the emulator.</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>Compiled from a direct read-through of the provided source: <code class="inline">Emulator.py</code>, <code class="inline">System.py</code>, <code class="inline">SuperIO.py</code>, <code class="inline">Exceptions.py</code>, <code class="inline">Vars.py</code>, <code class="inline">ssfs.py</code>, <code class="inline">bios.x32</code>, and <code class="inline">Teknikality.py</code>. Points marked "inferred" or "unconfirmed" reflect details the Python source defines behaviorally but that the BIOS assembly never exercises with a visible mnemonic.</p>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  // Mobile nav toggle
+  const toggle = document.getElementById('navToggle');
+  const sidebar = document.getElementById('sidebar');
+  toggle.addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.querySelectorAll('.toc a').forEach(a => {
+    a.addEventListener('click', () => sidebar.classList.remove('open'));
+  });
+
+  // Active section highlight
+  const links = Array.from(document.querySelectorAll('.toc a'));
+  const sections = links.map(a => document.querySelector(a.getAttribute('href')));
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const idx = sections.indexOf(entry.target);
+      if (idx === -1) return;
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        links[idx].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+  sections.forEach(s => { if (s) io.observe(s); });
+
+  // Copy-to-clipboard for code blocks
+  function copyBlock(btn){
+    const pre = btn.closest('.code-block').querySelector('pre');
+    const text = pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => btn.textContent = old, 1200);
+    });
+  }
+  window.copyBlock = copyBlock;
+</script>
+
+</body>
+</html>
