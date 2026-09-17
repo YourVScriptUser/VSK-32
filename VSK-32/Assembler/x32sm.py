@@ -18,6 +18,7 @@ See ASM_SYNTAX.md for the full instruction reference.
 """
 
 import sys
+import os
 import re
 import argparse
 import struct
@@ -401,6 +402,20 @@ class RegionMarker:
         self.line_text = line_text
 
 
+class OriginMarker:
+    """An `origin <addr>` directive: sets the offset added to every
+    subsequent `region <addr>` (and to the implicit starting cursor before
+    any region), so labels can be computed relative to where the code will
+    actually be loaded in memory (e.g. a boot sector loaded at 0x5C40)
+    rather than relative to 0. Emits no bytes; affects address math only."""
+    __slots__ = ("addr", "line_no", "line_text")
+
+    def __init__(self, addr, line_no=None, line_text=None):
+        self.addr = addr
+        self.line_no = line_no
+        self.line_text = line_text
+
+
 def resolve_value_operand(tok, line_no, line_text):
     """
     A bare value operand that can be a register, a label, an immediate, or a
@@ -421,13 +436,14 @@ def resolve_value_operand(tok, line_no, line_text):
     raise AsmError(f"Unrecognized operand: '{tok}'", line_no, line_text)
 
 
-DIRECTIVES = {"db", "dw", "dd", "region"}
+DIRECTIVES = {"db", "dw", "dd", "region", "origin"}
 DIRECTIVE_WIDTH = {"db": 1, "dw": 2, "dd": 4}
 
 
 def assemble_directive_line(ln):
     """
-    Handles db/dw/dd/region. Returns a DataItem or a RegionMarker.
+    Handles db/dw/dd/region/origin. Returns a DataItem, RegionMarker, or
+    OriginMarker.
     """
     mnem = ln.mnem
     ops = ln.operands
@@ -444,6 +460,17 @@ def assemble_directive_line(ln):
                 n, raw,
             )
         return RegionMarker(val[1], line_no=n, line_text=raw)
+
+    if mnem == "origin":
+        if len(ops) != 1:
+            raise AsmError(f"'origin' expects 1 operand, got {len(ops)}", n, raw)
+        val = resolve_value_operand(ops[0], n, raw)
+        if val[0] != "imm":
+            raise AsmError(
+                "'origin' requires an immediate/hex address (no labels or registers)",
+                n, raw,
+            )
+        return OriginMarker(val[1], line_no=n, line_text=raw)
 
     # db / dw / dd
     width = DIRECTIVE_WIDTH[mnem]
@@ -770,41 +797,115 @@ def assemble_line(ln):
 # Two-pass assembler driver
 # --------------------------------------------------------------------------
 
-def assemble(text, org=0):
+def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
     """
     Assembles source text into raw bytes.
     `org` is the base load address; all label addresses (and therefore all
     label-relative jump/call/mov/etc targets) are offset by this amount.
 
-    Supports interleaved instructions and db/dw/dd data directives, plus a
-    `region <addr>` directive that simply repositions the write pointer for
-    whatever comes next (like a traditional ORG directive) -- it doesn't
-    care what came before or after. Any gap this leaves in the output is
-    zero-filled.
+    Supports interleaved instructions and db/dw/dd data directives, plus:
+      - `region <addr>` repositions the write pointer for whatever comes
+        next (like a traditional ORG directive) -- it doesn't care what
+        came before or after. Any gap this leaves in the output is
+        zero-filled.
+      - `origin <addr>` sets a running offset added to every `region <addr>`
+        target from that point in the source onward (and to the starting
+        cursor, if placed before any code or the first region). This lets
+        you write region addresses relative to 0 while still producing
+        labels correct for wherever the code will actually be loaded --
+        e.g. a boot sector assembled with `origin 0x5C40` at the top can
+        use `region 0x0000` for its first byte and get real addresses
+        starting at 0x5C40.
+
+    `extern_labels`, if given, is a dict of name -> address imported from
+    another file's already-resolved symbol table (see --export-symbols /
+    --import-symbols on the CLI). This is how cross-file linking works:
+    since every address in this ISA is absolute (via origin/region) rather
+    than relative, an imported label is just another known address -- no
+    relocation needed. Externs are seeded into the local label table BEFORE
+    this file's own labels are collected, so:
+      - Referencing an extern (e.g. `call sys_readfile` where sys_readfile
+        was exported by ext_boot.asm) resolves exactly like a local label.
+      - A LOCAL label with the same name always wins and is NOT an error --
+        shadowing an extern is allowed, since you may legitimately want a
+        local helper with the same short name as an imported one.
+      - Colliding with an extern by defining a same-named local label does
+        NOT raise "Duplicate label", only two local defs of the same name
+        does. Externs are not "already defined" for that check.
+
+    `collect_labels_only`, if True, skips the resolution pass entirely
+    (which would otherwise raise "Undefined label" for any name this file
+    references but doesn't define/import) and returns as soon as this
+    file's OWN labels are collected. `code` is returned as b"" in this
+    mode -- it isn't computed. This is for harvesting a file's exported
+    addresses before its cross-file references can be resolved, e.g. a
+    multi-file build tool doing: harvest every file's labels first (this
+    mode), merge them into one externs pool, THEN do a real assemble()
+    call per file with that pool passed as extern_labels. Regular single-
+    file assembly should never need this -- leave it False.
 
     Returns (code, listing, labels, base_addr) where:
       - code is the assembled bytes, covering [base_addr, highest address
-        written + its size)
+        written + its size). b"" if collect_labels_only.
       - listing is a list of (address, item, encoded_bytes) for -l output,
-        item being an Instr or a DataItem
+        item being an Instr or a DataItem. [] if collect_labels_only.
       - base_addr is the lowest address anything was written to (equal to
-        `org` unless a `region` directive moved below it)
+        `org` unless a `region`/`origin` directive moved below it). 0 if
+        collect_labels_only and nothing was ever written.
+      - labels is the FULL label table (locals + any unshadowed externs),
+        suitable for passing to --export-symbols so a third file can link
+        against this one too.
     """
     lines = preprocess(text)
 
     # Pass 1: encode every instruction/directive, track byte addresses,
     # collect label defs. `region` repositions the cursor; it does not
-    # itself occupy space.
+    # itself occupy space. `origin` sets a running offset added to every
+    # `region <addr>` target from that point on (and to the starting
+    # cursor, if set before any code/region), so labels can be computed
+    # relative to where the code will actually be loaded in memory.
     items = []            # list of (addr, item) where item is Instr or DataItem
     labels = {}           # name -> address
-    addr = org
+    extern_names = set()  # tracks which entries in `labels` are externs (for
+                           # the "local always wins, no duplicate error" rule)
+    if extern_labels:
+        for name, addr_val in extern_labels.items():
+            labels[name] = addr_val
+            extern_names.add(name)
+    origin_offset = 0
+    addr = org + origin_offset
+    seen_any_addr_setting_item = False  # tracks whether origin can still
+                                         # retroactively bias the start cursor
+
+    def define_label(lbl, at_addr, ln):
+        # Shadowing an extern is fine (local always wins, silently); only
+        # two LOCAL definitions of the same name is a real duplicate-label
+        # error. Once shadowed, the name is no longer tracked as extern --
+        # this file's own definition is authoritative from here on.
+        if lbl in labels and lbl not in extern_names:
+            raise AsmError(f"Duplicate label '{lbl}'", ln.no, ln.raw)
+        extern_names.discard(lbl)
+        labels[lbl] = at_addr
 
     for ln in lines:
         if ln.mnem == "__end__":
             for lbl in ln.label:
-                if lbl in labels:
-                    raise AsmError(f"Duplicate label '{lbl}'", ln.no, ln.raw)
-                labels[lbl] = addr
+                define_label(lbl, addr, ln)
+            continue
+
+        if ln.mnem == "origin":
+            for lbl in ln.label:
+                define_label(lbl, addr, ln)
+
+            marker = assemble_directive_line(ln)
+            origin_offset = marker.addr
+            # If nothing has set an address yet (no region, no instruction,
+            # no data emitted), origin also biases the starting cursor --
+            # this is what lets a boot-sector file open with `origin
+            # 0x5C40` and have everything before the first `region` (or
+            # with no region at all) land at the real load address.
+            if not seen_any_addr_setting_item:
+                addr = org + origin_offset
             continue
 
         if ln.mnem == "region":
@@ -813,18 +914,16 @@ def assemble(text, org=0):
             # it, never labels sitting above it. Resolve those first, then
             # move the cursor.
             for lbl in ln.label:
-                if lbl in labels:
-                    raise AsmError(f"Duplicate label '{lbl}'", ln.no, ln.raw)
-                labels[lbl] = addr
+                define_label(lbl, addr, ln)
 
             marker = assemble_directive_line(ln)
-            addr = marker.addr
+            addr = marker.addr + origin_offset
+            seen_any_addr_setting_item = True
             continue
 
+        seen_any_addr_setting_item = True
         for lbl in ln.label:
-            if lbl in labels:
-                raise AsmError(f"Duplicate label '{lbl}'", ln.no, ln.raw)
-            labels[lbl] = addr
+            define_label(lbl, addr, ln)
 
         if ln.mnem in DIRECTIVES:  # db / dw / dd
             item = assemble_directive_line(ln)
@@ -835,6 +934,9 @@ def assemble(text, org=0):
             for ins in encoded:
                 items.append((addr, ins))
                 addr += INSTR_SIZE
+
+    if collect_labels_only:
+        return b"", [], labels, org
 
     # Pass 2: resolve label_ref -> concrete value(s)
     for a, item in items:
@@ -891,6 +993,62 @@ def format_listing(listing):
 
 
 # --------------------------------------------------------------------------
+# Symbol table files (.symtab) -- the cross-file linking mechanism
+# --------------------------------------------------------------------------
+#
+# Format: plain text, one "NAME 0xADDRESS" per line. Deliberately simple
+# and diffable/greppable. Written by --export-symbols after a file is
+# assembled; read by --import-symbols before assembling a file that
+# references those names (e.g. kernel.asm calling a routine exported by
+# ext_boot.asm). Since every address in this ISA is absolute, importing a
+# symtab is the entire linking step -- no relocation math needed.
+
+def write_symtab(path, labels):
+    with open(path, "w", encoding="utf-8") as f:
+        for name, addr in sorted(labels.items(), key=lambda kv: kv[1]):
+            f.write(f"{name} 0x{addr:08X}\n")
+
+
+def read_symtab(path):
+    labels = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line_no, raw in enumerate(f, start=1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) != 2:
+                die_symtab(path, line_no, raw)
+            name, addr_str = parts
+            try:
+                addr = int(addr_str, 0)
+            except ValueError:
+                die_symtab(path, line_no, raw)
+            labels[name] = addr
+    return labels
+
+
+def die_symtab(path, line_no, raw):
+    print(f"Malformed symtab line in '{path}' line {line_no}: {raw.strip()}",
+          file=sys.stderr)
+    sys.exit(1)
+
+
+def load_extern_labels(symtab_paths):
+    """Merges one or more --import-symbols files into a single dict.
+    Later files in the list win on name collisions (last-wins), since
+    that mirrors how the local-shadows-extern rule already works --
+    more specific/later-loaded symbol tables take precedence."""
+    merged = {}
+    for path in symtab_paths:
+        if not os.path.isfile(path):
+            print(f"Symbol table not found: {path}", file=sys.stderr)
+            sys.exit(1)
+        merged.update(read_symtab(path))
+    return merged
+
+
+# --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
 
@@ -912,13 +1070,35 @@ def main(argv=None):
         help="Base address the program will be loaded at in memory "
              "(offsets label addresses accordingly). Default 0."
     )
+    parser.add_argument(
+        "--export-symbols", default=None, metavar="FILE.symtab",
+        help="After assembling, write every resolved label (local + any "
+             "imported externs) to FILE.symtab, so another file can later "
+             "link against this one with --import-symbols."
+    )
+    parser.add_argument(
+        "--import-symbols", default=None, metavar="A.symtab[,B.symtab,...]",
+        help="Comma-separated list of .symtab files (from a prior "
+             "--export-symbols run) whose labels are made available to "
+             "this file as externs -- e.g. kernel.asm can 'call "
+             "sys_readfile' where sys_readfile was defined and exported "
+             "by ext_boot.asm. A local label of the same name always "
+             "shadows an imported one. If multiple files define the same "
+             "name, the last one listed wins."
+    )
     args = parser.parse_args(argv)
 
     with open(args.input, "r", encoding="utf-8") as f:
         text = f.read()
 
+    extern_labels = None
+    if args.import_symbols:
+        paths = [p.strip() for p in args.import_symbols.split(",") if p.strip()]
+        extern_labels = load_extern_labels(paths)
+
     try:
-        code, listing, labels, base_addr = assemble(text, org=args.org)
+        code, listing, labels, base_addr = assemble(text, org=args.org,
+                                                      extern_labels=extern_labels)
     except AsmError as e:
         print(f"Assembly failed: {e}", file=sys.stderr)
         return 1
@@ -928,6 +1108,10 @@ def main(argv=None):
         f.write(code)
 
     print(f"Assembled {len(listing)} item(s), {len(code)} bytes -> {out_path}")
+
+    if args.export_symbols:
+        write_symtab(args.export_symbols, labels)
+        print(f"Exported {len(labels)} symbol(s) -> {args.export_symbols}")
     if base_addr != args.org:
         print(
             f"NOTE: a 'region' directive moved below --org; load this file "

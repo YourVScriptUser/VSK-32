@@ -1,16 +1,14 @@
 # Emulator.py
 
-# Import all modules
+# Import all local modules/devices
 from Emu.System import System
 from Emu.System import SuperIO
+from Emu.System import Display
 # System.py checks for Windows 
- 
+
 # Early initialization
  
 EmuConsoleColors = System.Teknikality.colors
-__last_refresh_frame = None
-__can_do_refresh     = False
-__refresh_threadExit = False
 
 System.Teknikality.hide_cursor() # Hide the console cursor.
 
@@ -23,29 +21,10 @@ def EmuConsole(msg, prefix=None):
     """Formats the message as a emulator message"""
     System.sys_write_stdout(f"{prefix if prefix else ''}{EmuConsoleColors.CYAN}Emulator Log:{EmuConsoleColors.BRIGHT_BLACK} {msg}{EmuConsoleColors.RESET}")
  
-EmuConsole("Allocating emulator memory...")
-Memory = System.memory()
-EmuConsole(f"Emulator memory allocated: {len(Memory.Memory)}B")
- 
-EmuConsole("Allocating virtual registers...")
-Registers = System.registers()
-EmuConsole(f"Virtual registers allocated: {' '.join([System.format_hex_32(r) for r in Registers.regs32.arr])}")
 
-EmuConsole("Allocating virtual ports...")
-PortIO = SuperIO.portio()
-EmuConsole("Allocated virtual ports")
-
-EmuConsole("Setting up interrupting devices polling thread...")
-Registers.flags["IF"] = 0
-InterruptHandler = SuperIO.InterruptHandler(PortIO)
-InterruptHandler.InterruptThread()
-
-EmuConsole("Setting up virtual non-interrupting devices...")
-NonInterruptDevicesHandler = SuperIO.NonInterruptThreadDevices(memory=Memory, ports=PortIO)
-
-EmuConsole("Main objects initialized")
  
 def LoadBinary(path, base_addr=None):
+    EmuConsole(f"Loading '{System.os.path.basename(path)}' into memory...")
     
     if not System.os.path.isfile(path):
         raise FileNotFoundError(f"Binary not found: {path}")
@@ -74,126 +53,134 @@ def LoadBinary(path, base_addr=None):
     return base_addr, len(data)
 
 
-def screen_refresh_thread():
-  
-  
-  def refresh_thread():
-    global __can_do_refresh, __last_refresh_frame, __refresh_threadExit
-    # Refreshes the screen at 30hz
-    # May we have a moment of silence for whatever CPU thread this is running on.
-    while not __refresh_threadExit:
-      if __can_do_refresh:
-          color_map = {
-                            130: System.Teknikality.colors.RED,
-                            131: System.Teknikality.colors.GREEN,
-                            132: System.Teknikality.colors.BLUE,
-                            133: System.Teknikality.colors.BRIGHT_BLACK,
-                            134: System.Teknikality.colors.CYAN,
-                            135: System.Teknikality.colors.BG_RED,
-                            136: System.Teknikality.colors.RESET
-          }
-  
-          Fbuf = []
-          _pointer = Memory.Map.VIDEO[0]
-          while True:
-              if _pointer > Memory.Map.VIDEO[1]:
-                  break
-  
-              current_byte = Memory.read_byte(_pointer)
-              if current_byte == 0:
-                  break
-  
-              if 10 <= current_byte <= 126:
-                  Fbuf.append(chr(current_byte))
-              elif current_byte in color_map:
-                  Fbuf.append(color_map[current_byte])
-  
-              _pointer += 1
-  
-          frame_str = "".join(Fbuf)
-  
-          # if the frame didn't change, don't do the refresh
-          if frame_str == __last_refresh_frame:
-              System.time.sleep(0.03333) # ~30hz
-              continue
-          
-          __last_refresh_frame = frame_str
-  
-          # reset cursor to 0,0 and append the new frame
-          System.sys.stdout.write(System.Teknikality.colors.RESET + "\033[H\033[2J" + frame_str + "\033[0J\n\n")
-          System.sys.stdout.flush()
-  
-          System.time.sleep(0.03333) # ~30hz
-      else:
-          System.time.sleep(0.3) # so it doesn't bully the CPU when we are not refreshing
-
-
-  t = SuperIO.threading.Thread(target=refresh_thread, daemon=True)
-  t.start()
-  return t
-
-__Screen_Thread = screen_refresh_thread()
 
 def LoadVMBios():
     """Loads the Emulator BIOS into memory"""
+    if not System.os.path.exists(System.Vars.BIOS_PATH_RELATIVE):
+        System.Exceptions.warning_window(f"VM_BIOS Not Found!\nPath: '{System.Vars.BIOS_PATH_RELATIVE}'", "BIOS Missing")
+        EmuConsoleWarn("VM_BIOS Not Found at relative BIOS path")
+        EmuConsoleWarn("Cannot continue, running shutdown")
+        Shutdown()
     LoadBinary(path=System.Vars.BIOS_PATH_RELATIVE, base_addr=0x00000000)
 
 def EmuRun():
-    """Loads the BIOS then runs the emulator, running cycles."""
-    global __can_do_refresh
+    """Loads the BIOS and then steps the CPU at a ~200KHz max theoretical clock speed"""
+
+    TARGET_HZ = 200_000
+    BATCH_SIZE = 500
+    TARGET_BATCH_TIME = BATCH_SIZE / TARGET_HZ
+
     LoadVMBios()
     EmuConsole("VM BIOS Loaded into memory @ 0x00000000")
-    System.time.sleep(0.5) # Let the user read the logs befor they all get wiped
-
-    System.Teknikality.clearscreen()
-    __can_do_refresh = True
-
-    try:
-      while True:
-        cpu32.step()
-        cpu32.interrupt_tick()
-    except KeyboardInterrupt:
-        __can_do_refresh = False
-        System.Teknikality.clearscreen()
+    System.time.sleep(0.5)  # Let the user read the logs before they all get wiped
+    EmuConsole("Checking VM_DISK state...")
+    if not System.os.path.exists(System.Vars.DISK_PATH_RELATIVE):
+        System.Exceptions.warning_window("Emulator virtual disk not found", "Disk Not Found")
+        EmuConsoleWarn("VM_DISK not found!")
+        EmuConsoleWarn("Cannot continue, running shutdown")
+        Shutdown()
+    
+    if System.os.path.getsize(System.Vars.DISK_PATH_RELATIVE) != 512 * 1024 * 1024:
+        System.Exceptions.warning_window("VM_DISK: Invalid Size", "Disk Corrupt")
+        EmuConsoleWarn("VM_DISK size is wrong!")
+        EmuConsoleWarn("Cannot continue, running shutdown")
         Shutdown()
         
+    # Give the user a chance to read logs    
+    System.time.sleep(0.5)
+
+    System.Teknikality.clearscreen()
+    VMDisplay.can_refresh = True
+
+    try:
+        while True:
+            batch_start = System.time.perf_counter()
+
+            for _ in range(BATCH_SIZE):
+                cpu32.step()
+                cpu32.interrupt_tick()
+
+            elapsed = System.time.perf_counter() - batch_start
+            remaining = TARGET_BATCH_TIME - elapsed
+
+            if remaining > 0:
+                System.time.sleep(remaining)
+
+    except KeyboardInterrupt:
+        VMDisplay.can_refresh = False
+        System.Teknikality.clearscreen()
+        EmuConsole("Shutdown hotkey CTRL+C pressed, running shutdown.")
+        Shutdown()
+
     except Exception as e:
-        System.error_window(error_title="VSK-32: Guru Meditation (Fatal Error)", error_message=f"Cannot continue emulator execution. \n\n\nException Type:\n {str(type(e))}", error_code=0x1A)
+        VMDisplay.can_refresh = False
+        System.error_window(
+            error_title="VSK-32 - Guru Meditation",
+            error_message=(
+                "A critical exception occurred during emulator runtime "
+                "and emulator execution stopped.\n\n"
+                f"Exception Type:\n {str(type(e))}\n\n"
+                f"Traceback:\n {''.join(System.traceback.format_stack())}\n\n"
+                f"Instruction Pointer:\n 0x{System.format_hex_32(Registers.ip.read())}\nFlag Register:\n {Registers.flags}\n\n"
+                "Press OK to shutdown the emulator.\n"
+                "View emulator console for debug information.\n"
+                "Emulator will now shutdown."
+            ),
+        )
         Shutdown()
 
 
  
 def Shutdown():
     """Prints status info, writes a memory dump then gracefully shuts down the Emulator."""
-    global __Screen_Thread, __refresh_threadExit
+    global GUI
 
-    EmuConsole("Shutting down...")
-    EmuConsole("Final State:")
-    EmuConsole(f"regs32: {' '.join([str("r") + str(Registers.regs32.arr.index(r)) + str(": 0x") + System.format_hex_32(r) for r in Registers.regs32.arr])}")
-    EmuConsole(f"IP:     0x{Registers.ip.read()}")
-    EmuConsole(f"SP:     0x{Registers.sp.read()}")
-    EmuConsole(f"FLAGS:  {Registers.flags}")
-    EmuConsole(f"CYCLE:  {cpu32.current_cycle}")
+    EmuConsole("Shutting down...\n\n")
+    print("Final State:")
+    # FIX:
+    # Fix support for PyPy where '\n' cannot be part of the f-string
+    NEWLINE = '\n'
+    print(f"regs32:\n {f'{NEWLINE} '.join([f'r{i}: 0x' + System.format_hex_32(r) for i, r in enumerate(Registers.regs32.arr)])}")
+    print(f"IP:\n 0x{System.format_hex_32(Registers.ip.read())}")
+    print(f"SP:\n 0x{System.format_hex_32(Registers.sp.read())}")
+    print(f"FLAGS:  {Registers.flags}")
+    print(f"CYCLE:  {cpu32.current_cycle}")
+    dump_path_found = System.os.path.exists(System.Vars.DUMP_PATH_RELATIVE)
     
-    with open(System.Vars.DUMP_PATH_RELATIVE, "r+b") as f:
-      f.seek(0)
-      f.write(Memory.Memory)
-          
+    if not dump_path_found:
+        EmuConsoleWarn("Cannot write memory dump, dump file does not exist!")
+  
+    if dump_path_found:
+      with open(System.Vars.DUMP_PATH_RELATIVE, "r+b") as f:
+        f.seek(0)
+        f.write(Memory.Memory)
+      
+      print(f"Memory dump available at: '{System.Vars.DUMP_PATH_RELATIVE}'")       
+    
+    GUI.stop()
     InterruptHandler._threadExit = True
     InterruptHandler.thread.join()
+    VMDisplay.threadExit = True
+    VMDisplayThread.join()
 
-    __refresh_threadExit = True
-    __Screen_Thread.join()
+
+    # NOTE: Lousy attempts to stop tkinter's main loop error by brute forcing python to shut up, not a fix, but a workaround.
+    print("You may need to press CTRL+C to exit.")
+    System.sys.stdout = open(System.os.devnull, "w")
+    System.sys.stderr = open(System.os.devnull, "w")
+
+    def CHOKE_TKINTER_TO_DEATH(): ... 
+    
+    System.sys.unraisablehook = CHOKE_TKINTER_TO_DEATH
     
     Memory.Memory = bytearray(0)
-    del Memory.Memory
-    
+
     System.sys.exit(0)
  
  
  
 
-# MAIN CPU
+
  
  
  
@@ -263,7 +250,7 @@ class cpu32:
         System.Exceptions.InvalidOpcodeError.InvalidFlags:  62,
         System.Exceptions.InvalidRegister:                  61,
         System.Exceptions.InvalidMemoryWrite:               60,
-        System.Exceptions.UnknownError:                     59
+        System.Exceptions.UnknownError:                     59,
     }
  
     @staticmethod
@@ -296,11 +283,10 @@ class cpu32:
  
     @staticmethod
     def decode_current_ip():
-        """Decodes the instruction at the current address in the IP register"""
- 
+        """Decodes the instruction at the current address in the IP register\n"""        
         # Step 1: Read opcode byte
         opcode    = cpu32.fetch8()
-        if opcode == 0:
+        if opcode not in cpu32.opcode_list:
             raise System.Exceptions.InvalidOpcodeError.UnknownOpcode
  
         # Step 2: Read BOP bytes
@@ -315,7 +301,7 @@ class cpu32:
         # Step 4: Read byte flags
         flags    = cpu32.fetch8()
  
-        # Step 5: Return decoded instruction to caller
+        # Step 5: Return decoded instruction 
         return [opcode, a, b, imm16, extra, flags, combined]
 
     @staticmethod
@@ -362,18 +348,23 @@ class cpu32:
  
     @staticmethod
     def step():
-        """Runs a single fetch>decode>execute tick, does **NOT** check for pending hardware interrupts"""
+        """Runs a single fetch>decode>execute tick, does **NOT** check for pending hardware interrupts, **DOES** handle CPU exceptions"""
         try:
           cpu32.run(cpu32.decode_current_ip())           # opcode is a list of ints
         except Exception as e:                           # decode_current_ip() returns that
           fault_isr_id = cpu32.EXCEPTION_DISPATCH_TABLE.get(type(e), cpu32.EXCEPTION_DISPATCH_TABLE[System.Exceptions.UnknownError])
+          # Write exception code to r0
+          Registers.regs32.write(arr=0, val=cpu32.EXCEPTION_DISPATCH_TABLE.get(type(e), cpu32.EXCEPTION_DISPATCH_TABLE[System.Exceptions.UnknownError]))
+          # Write faulting address to r1
+          Registers.regs32.write(arr=1, val=round(Registers.ip.read() / 8) * 8) # rounded and blah blah blah to find the nearest actual opcode
           cpu32.setup_interrupt_environment(fault_isr_id * 4)                
                                                          
         cpu32.current_cycle += 1
  
     @staticmethod
     def run(opcode):
-        """Runs an opcode"""
+        """Runs the opcode you give it"""
+
         # Step 1: Extract the opcode
         op     = opcode[0]
         a      = opcode[1]
@@ -382,7 +373,6 @@ class cpu32:
         extra  = opcode[4]
         flags  = opcode[5]
         imm32  = opcode[6]  # Note: Combination of imm16 and extra  
- 
         # cpu halt
         # FIXEDME: HLT Changed to wait for a interrupt
         if   op == cpu32.opcodes.OPCODE_HALT:
@@ -390,15 +380,15 @@ class cpu32:
                 if cpu32.interrupt_tick():
                     break
                 System.time.sleep(0.001) 
- 
+
         # load immediate -> register
         elif op == cpu32.opcodes.OPCODE_LOAD_IMM32:
             reg = a
             val = imm32
             
- 
+
             Registers.regs32.write(arr=reg, val=val)
- 
+
         # indirect jump
         elif op == cpu32.opcodes.OPCODE_INDIR_JUMP:
             if   flags == 0:   # immediate jump
@@ -406,23 +396,23 @@ class cpu32:
             elif flags == 1:   # register jump
                 reg = a
                 Registers.ip.write(Registers.regs32.read(reg))          
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags
                 
- 
+
         # add / sub / div / mul
         elif op == cpu32.opcodes.OPCODE_ADD:
               if   flags == 0:
                   dest = a
                   src  = b
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) + Registers.regs32.read(src))
- 
+
               elif flags == 1:
                   dest = a
                   am   = imm32
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) + imm32)
                  
               else:
@@ -431,13 +421,13 @@ class cpu32:
               if   flags == 0:
                   dest = a
                   src  = b
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) - Registers.regs32.read(src))
- 
+
               elif flags == 1:
                   dest = a
                   am   = imm32
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) - imm32)
                  
               else:
@@ -446,13 +436,13 @@ class cpu32:
               if   flags == 0:
                   dest = a
                   src  = b
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) // Registers.regs32.read(src))
- 
+
               elif flags == 1:
                   dest = a
                   am   = imm32
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) // imm32)
                  
               else:
@@ -461,18 +451,18 @@ class cpu32:
               if   flags == 0:
                   dest = a
                   src  = b
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) * Registers.regs32.read(src))
- 
+
               elif flags == 1:
                   dest = a
                   am   = imm32
- 
+
                   Registers.regs32.write(arr=dest, val=Registers.regs32.read(dest) * imm32)
                  
               else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags 
- 
+        
         # Compares registers or imm32 to a register
         elif op == cpu32.opcodes.OPCODE_COMPARE:
               if   flags == 0:
@@ -488,12 +478,12 @@ class cpu32:
                   Registers.flags["EQ"] = Registers.regs32.read(reg_main) == imm_comp
                   Registers.flags["LO"] = Registers.regs32.read(reg_main) < imm_comp
                   Registers.flags["HI"] = Registers.regs32.read(reg_main) > imm_comp
- 
+
               else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags
- 
- 
- 
+
+
+
         # jump if equal / lower / higher
         elif op == cpu32.opcodes.OPCODE_INDIR_JUMP_EQ:
             if Registers.flags["EQ"] == 1:
@@ -507,136 +497,136 @@ class cpu32:
         elif op == cpu32.opcodes.OPCODE_INDIR_JUMP_NE:
             if Registers.flags["EQ"] == 0:
                 Registers.ip.write(imm32)
- 
+
         # 32-bit move
         elif op == cpu32.opcodes.OPCODE_INDIR_COPY_DATA:
- 
+
             # Register -> Immediate Memory
             if   flags == 0:
                 reg  = a
                 addr = imm32
- 
+
                 Memory.write_dword(val=Registers.regs32.read(reg), addr=addr)
- 
+
             # Immediate Memory -> Register
             elif flags == 1:
                 reg  = a
                 addr = imm32
- 
+
                 Registers.regs32.write(arr=reg, val=Memory.read_dword(addr))
- 
+
             # Memory Register -> Register
             elif flags == 2:
                 reg_src  = a   # holds the address to read from
                 reg_dest = b   # receives the value
- 
+
                 read_value = Memory.read_dword(Registers.regs32.read(reg_src))
- 
+
                 Registers.regs32.write(arr=reg_dest, val=read_value)
- 
+
             # Register -> Memory Register
             elif flags == 3:
                 reg_src  = a   # holds the value to write
                 reg_dest = b   # holds the address to write to
- 
+
                 addr_dest = Registers.regs32.read(reg_dest)
- 
+
                 Memory.write_dword(val=Registers.regs32.read(reg_src), addr=addr_dest)
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags
- 
+
         # 8-bit write
         elif op == cpu32.opcodes.OPCODE_WRITE_BYTE:
             # write_byte does AND masking
             # snips the lower 8 bits
- 
+
             if   flags == 0:
                 reg  = a
                 addr = imm32
- 
+
                 Memory.write_byte(val=Registers.regs32.read(reg), addr=addr)
- 
+
             elif flags == 1:
                 reg  = a
                 rega = b
                 addr = Registers.regs32.read(rega)
- 
+
                 Memory.write_byte(val=Registers.regs32.read(reg), addr=addr)
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags
- 
+
         # 16-bit write
         elif op == cpu32.opcodes.OPCODE_WRITE_WORD:
             # write_word does AND masking
             # snips the lower 16 bits
- 
+
             if   flags == 0:
                 reg  = a
                 addr = imm32
- 
+
                 Memory.write_word(val=Registers.regs32.read(reg), addr=addr)
- 
+
             elif flags == 1:
                 reg  = a
                 rega = b
                 addr = Registers.regs32.read(rega)
- 
+
                 Memory.write_word(val=Registers.regs32.read(reg), addr=addr)   
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags             
- 
+
         # 8-bit read
         elif op == cpu32.opcodes.OPCODE_READ_BYTE:
             if   flags == 0:
                 reg  = a
                 addr = imm32
- 
+
                 Registers.regs32.write(arr=reg, val=Memory.read_byte(addr=addr))
- 
+
             elif flags == 1:
                 reg  = a
                 rega = b
                 addr = Registers.regs32.read(rega)
- 
+
                 Registers.regs32.write(arr=reg, val=Memory.read_byte(addr=addr))
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags
- 
+
         # 16-bit read
         elif op == cpu32.opcodes.OPCODE_READ_WORD:
             if   flags == 0:
                 reg  = a
                 addr = imm32
- 
+
                 Registers.regs32.write(arr=reg, val=Memory.read_word(addr=addr))
- 
+
             elif flags == 1:
                 reg  = a
                 rega = b
                 addr = Registers.regs32.read(rega)
- 
+
                 Registers.regs32.write(arr=reg, val=Memory.read_word(addr=addr))
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags
- 
+
         # Moves SP
         elif op == cpu32.opcodes.OPCODE_MOVE_STACK:
             if   flags == 0:
                 addr = imm32
- 
+
                 Registers.sp.write(addr)
- 
+
             elif flags == 1:
                 reg  = a
                 addr = Registers.regs32.read(reg)
- 
+
                 Registers.sp.write(addr)
- 
+
             else:
                 raise System.Exceptions.InvalidOpcodeError.InvalidFlags  
                  
@@ -644,12 +634,12 @@ class cpu32:
         elif op == cpu32.opcodes.OPCODE_PUSH:
             if   flags == 0:
                 val  = imm32
- 
+
                 cpu32.stack.push(val)    
- 
+
             elif flags == 1:
                 val  = Registers.regs32.read(a)
- 
+
                 cpu32.stack.push(val)   
                 
             else:
@@ -658,25 +648,25 @@ class cpu32:
             reg = a
            
             Registers.regs32.write(arr=reg, val=cpu32.stack.pop())
- 
+
         # call/ret
         elif op == cpu32.opcodes.OPCODE_CALL:
             addr = imm32
- 
+
             cpu32.stack.push(Registers.ip.read())
             Registers.ip.write(addr)
         elif op == cpu32.opcodes.OPCODE_RET:
             addr = cpu32.stack.pop()
             Registers.ip.write(addr)
- 
+
         # int
         elif op == cpu32.opcodes.OPCODE_SOFTWARE_INTERRUPT:
             code = a * 4
             # multiplicated by 4 so it points to the next dword entry
- 
+
             # ISR Entries are dwords
             cpu32.setup_interrupt_environment(ivt_vector=code)
- 
+
         # interrupt return
         elif op == cpu32.opcodes.OPCODE_SOFTWARE_INTERRUPT_RETURN:
             Registers.ip.write(cpu32.stack.pop())
@@ -755,12 +745,40 @@ class cpu32:
             Registers.flags["HI"] = 0
             Registers.flags["LO"] = 0
             # Dont touch IF - comparison flags only.
+           
+         
 
-            
+EmuConsole("Allocating emulator memory...")
+Memory = System.memory()
+EmuConsole(f"Emulator memory allocated: {len(Memory.Memory)}B") 
  
+EmuConsole("Allocating virtual registers...")
+Registers = System.registers()
+EmuConsole(f"Virtual registers allocated: {' '.join([System.format_hex_32(r) for r in Registers.regs32.arr])}")
+  
+EmuConsole("Allocating virtual ports...")
+PortIO = SuperIO.portio()
+EmuConsole("Allocated virtual ports")
+
+EmuConsole("Setting up interrupting devices polling thread...")
+Registers.flags["IF"] = 0
+InterruptHandler = SuperIO.InterruptHandler(PortIO)
+InterruptHandler.InterruptThread()
+
+EmuConsole("Setting up virtual non-interrupting devices...")
+NonInterruptDevicesHandler = SuperIO.NonInterruptThreadDevices(memory=Memory, ports=PortIO)
+EmuConsole("Starting GUI...")
+GUI =     System.start_gui(regs=Registers, mem=Memory, cpu=cpu32)  
+
+EmuConsole("Starting virtual display device...")
+VMDisplay = Display.Display(mem=Memory, ports=PortIO)
+VMDisplayThread = VMDisplay.spawn_refresh_thread()
+VMDisplayThread.start()
+
+EmuConsole("Main objects initialized")
 EmuRun()
  
- 
+
  
                     
  

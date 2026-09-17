@@ -1,7 +1,8 @@
 # Vars.py
 
-DISK_PATH_RELATIVE = "VM_DISK/vmdisk.img"
-BIOS_PATH_RELATIVE = "VM_BIOS/bios.rom"
-DUMP_PATH_RELATIVE = "M_DUMP/dump.bin"
+DISK_PATH_RELATIVE = "Storage/Disk/vmdisk.img"
+BIOS_PATH_RELATIVE = "Storage/Firmware/bios.rom"
+DUMP_PATH_RELATIVE = "Memory Dump/dump.bin"
 DISK_SECTOR_SIZE   = 1024 # Bytes
 DISK_END_SECTOR    = 524288 
+LOG_FILE           = "EmuLog/log.txt" # Not used anymore!
