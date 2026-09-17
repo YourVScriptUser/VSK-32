@@ -20,21 +20,21 @@ if command == "WriteVMDisk":
     with open(Vars.DISK_PATH_RELATIVE, "wb") as f:
       f.write(b"\x00" * (512 * 1024 * 1024))
       
-    print("Created 'VM_DISK/vmdisk.img'")
+    print(f"Created '{Vars.DISK_PATH_RELATIVE}'")
     sys.exit(0)
     
 elif command == "WriteMEMDump":   
     with open(Vars.DUMP_PATH_RELATIVE, "wb") as f:
       f.write(b"\x00" * (256 * 1024 * 1024))
           
-    print("Created 'M_DUMP/dump.bin'")
+    print(f"Created '{Vars.DUMP_PATH_RELATIVE}'")
     sys.exit(0) 
     
 elif command == "WriteBIOS":   
     with open(Vars.BIOS_PATH_RELATIVE, "wb") as f:
       f.write(b"\x00" * (21 * 1024))
           
-    print("Created 'VM_BIOS/bios.rom'")
+    print(f"Created '{Vars.BIOS_PATH_RELATIVE}'")
     sys.exit(0)
 
 
