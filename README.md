@@ -45,4 +45,6 @@ Reading boot sector... fail
 Boot Failed: Not a bootable disk.
 ```
 
+Then press `ctrl+c` to shut down the emulator
+
 For OSes, see VS-OS and Quasix.
