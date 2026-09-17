@@ -1,4 +1,4 @@
-33 Opcodes, BIOS, 34 32-bit registers, byte-addressed, 256-dword PMIO, 256MiB RAM, 512MiB 1024B/sector disk
+33 Opcodes, BIOS, 24 32-bit registers, byte-addressed, 256-dword PMIO, 256MiB RAM, 512MiB 1024B/sector disk
 
 Requires python >3.12 (Built on 3.14.3)
 
