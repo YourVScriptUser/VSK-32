@@ -13,7 +13,7 @@ Includes BIOS source
 
 To setup the enviroment:
 
-Put the VSK-32 Parent folder wherever you want choose
+Put the VSK-32 Parent folder wherever you want 
 
 Navigate to VSK-32/ in cmd or powershell >>> `cd "path-to-VSK-32"`
 
