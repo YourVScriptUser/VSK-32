@@ -118,10 +118,28 @@ Cross-file linking:
               no relocation in this ISA and the tool can't invent
               addresses for you).
       Pass 2: assemble every source file again, this time importing every
-              OTHER file's Pass 1 labels as externs, and using the real
-              output. A local label always shadows an imported one of the
-              same name (see x32sm.py's extern_labels docs).
+              OTHER file's Pass 1 EXPORTED labels as externs, and using
+              the real output. Defining a LOCAL label with the same name
+              as an imported (extern) one is a hard build error -- not
+              silent shadowing -- since it's a way to accidentally lose
+              access to the intended cross-file label with no warning.
+              Rename one of the two colliding labels to fix it (see
+              x32sm.py's extern_labels docs for the exact error).
     Raw (non-source) files aren't part of this -- they have no labels.
+
+    Which labels a file exports is controlled by `global <name>` lines
+    in that source file (see x32sm.py's module docstring for the exact
+    syntax/rules): a file with at least one `global` line only exports
+    the names it explicitly lists there, so two files can freely reuse
+    the same private (non-exported) label name without colliding -- the
+    collision error above only fires against names that are actually
+    visible as externs, never against another file's private labels. A
+    file with NO `global` lines exports every label it defines,
+    unchanged from how this worked before `global` existed -- so
+    existing sources keep linking exactly as before until you opt a
+    file into the restricted behavior by adding its first `global` line
+    (at which point its previously-shared names become collision-
+    checked like any other export).
 
 Symbol file (symfile {name} in .fiex):
     Every resolved label from EVERY assembled unit (sinboot, extboot, and
@@ -386,13 +404,16 @@ def validate_ext_overrides(config, other_files):
 
 class AsmUnit:
     """One source file being tracked through the two build passes."""
-    __slots__ = ("fname", "path", "disk_name", "labels", "code", "base_addr")
+    __slots__ = ("fname", "path", "disk_name", "labels", "exported_labels",
+                 "local_labels", "code", "base_addr")
 
     def __init__(self, fname, path, disk_name=None):
         self.fname = fname
         self.path = path
         self.disk_name = disk_name  # None for boot/ext_boot (not "files")
         self.labels = {}
+        self.exported_labels = {}
+        self.local_labels = {}
         self.code = b""
         self.base_addr = 0
 
@@ -413,31 +434,41 @@ def assemble_pass1(unit):
     OS-level convention, not by disk layout)."""
     text = read_source(unit.path)
     try:
-        _code, _listing, labels, _base_addr = x32sm.assemble(
+        (_code, _listing, labels, _base_addr,
+         exported_labels, local_labels) = x32sm.assemble(
             text, org=0, collect_labels_only=True)
     except x32sm.AsmError as e:
         die(f"[{unit.fname}] pass 1 (label harvesting) failed: {e}")
     unit.labels = labels
+    unit.exported_labels = exported_labels
+    unit.local_labels = local_labels
 
 
 def assemble_pass2(unit, all_units):
-    """Real assembly, importing every OTHER unit's Pass 1 labels as
-    externs (last-listed-wins on collision, same rule as x32sm.py's
+    """Real assembly, importing every OTHER unit's Pass 1 EXPORTED labels
+    as externs (last-listed-wins on collision, same rule as x32sm.py's
     --import-symbols; order here is the same os.listdir() order used for
-    disk placement, so builds are reproducible per machine)."""
+    disk placement, so builds are reproducible per machine). Uses
+    exported_labels, not the full labels table, so a file with `global`
+    lines only exposes what it explicitly marked -- a file with no
+    `global` lines still exports everything (see x32sm.py's assemble()
+    docstring), so old sources keep working unchanged."""
     externs = {}
     for other in all_units:
         if other is unit:
             continue
-        externs.update(other.labels)
+        externs.update(other.exported_labels)
 
     text = read_source(unit.path)
     try:
-        code, _listing, labels, base_addr = x32sm.assemble(
+        (code, _listing, labels, base_addr,
+         exported_labels, local_labels) = x32sm.assemble(
             text, org=0, extern_labels=externs)
     except x32sm.AsmError as e:
         die(f"[{unit.fname}] pass 2 assembly failed: {e}")
     unit.labels = labels
+    unit.exported_labels = exported_labels
+    unit.local_labels = local_labels
     unit.code = code
     unit.base_addr = base_addr
 
@@ -494,27 +525,43 @@ def build_directory_sector(entries):
 # --------------------------------------------------------------------------
 
 def build_symbol_table(units):
-    """Merges every unit's resolved labels into one dict, last-in-`units`
-    wins on name collisions -- the SAME order and rule assemble_pass2
-    already uses to build externs, so the symbol file matches exactly
-    what cross-file `call`s actually resolved to, not a raw per-file
-    dump. `units` should be [boot, ext_boot, *file_units] (build order),
-    since every single label from every file is in scope."""
-    merged = {}
+    """Collects every unit's LOCAL label (name, address) pairs into one
+    list -- NOT a dict merge, deliberately, because `global` lets
+    different files reuse the same private label name (that's the whole
+    point), so two files can easily define a same-named label at
+    different addresses. A dict keyed by name would silently drop one of
+    them; this keeps both. Uses u.local_labels (only what THIS file
+    itself defines), NOT u.labels (which also contains every cross-file
+    extern it imported) and NOT u.exported_labels (restricted by
+    `global`) -- u.labels would duplicate each cross-file symbol once
+    per importing file, since assemble() seeds externs into `labels`
+    before collecting local defs; u.local_labels already excludes those
+    passthrough entries. SYMBOLS.SYM is a debug/stack-trace aid, not a
+    linking artifact, so it intentionally includes file-private labels
+    too, unrestricted by `global`. Duplicate names across files are
+    fine: the stack-trace lookup walks address-sorted entries picking
+    the nearest one at or below a target address, which works correctly
+    regardless of whether some names repeat. `units` should be [boot,
+    ext_boot, *file_units] (build order, though order doesn't actually
+    matter for this list)."""
+    pairs = []
     for u in units:
-        merged.update(u.labels)
-    return merged
+        pairs.extend(u.local_labels.items())
+    return pairs
 
 
-def encode_symbol_file(symbol_table):
+def encode_symbol_file(symbol_pairs):
     """Binary format, repeated per label, no fixed width:
         offset 0  size 4  address, u32 LE
         offset 4  size N  ASCII name, NUL-terminated
-    Order: by address ascending, then name, so the file is stable/
-    diffable across rebuilds instead of depending on dict iteration
-    order."""
+    `symbol_pairs` is a list of (name, addr), NOT a dict -- duplicate
+    names are expected and preserved (see build_symbol_table). Order: by
+    address ascending, then name, so the file is stable/diffable across
+    rebuilds instead of depending on collection order, and so the
+    stack-trace-style nearest-at-or-below lookup can rely on ascending
+    order and stop scanning early."""
     buf = bytearray()
-    for name, addr in sorted(symbol_table.items(), key=lambda kv: (kv[1], kv[0])):
+    for name, addr in sorted(symbol_pairs, key=lambda kv: (kv[1], kv[0])):
         try:
             name_bytes = name.encode("ascii")
         except UnicodeEncodeError:

@@ -111,10 +111,13 @@ interrupts.keyboard:
   sub r1, 1
   add r0, r1
   
+  push r3
   cmp r0, r10
   je keyboard.clear_internal
-
-  ; If it is not full, then write the key
+  keyboard_clear_return:
+  call keyboard.read_cursor ; refresh this incase a clear happened
+  pop r3
+  ; then write the key
   wb [r10], r3
  
   ; Increment the buffer cursor
@@ -125,7 +128,7 @@ interrupts.keyboard:
   wb [r9], r10
   
   clf   ; Clear comparison flags
-  ; MASSIVE BUG FIX:
+  ; FIX:
   ;  For programs that wait for input using a sti;hlt loop, this would break randomley and cause a halted CPU because:
   ; sti
   ; emulator checks for interrupts
@@ -189,9 +192,8 @@ interrupts.keyboard:
     wb [r1], r0
 
     clf
-    ; FIX: sti was not added here in a previous fix!
-    sti
-    iret  
+    ; FIX: Early termination when the buffer was cleared was causing missed keys
+    jmp keyboard_clear_return
 
   ; Clears the keyboard buffer
   ; Overwrites it with 0s
@@ -635,7 +637,7 @@ pause.end:
 
 ; STRING POOL
 STRING_BIOS_BANNER: 
-  db 132, "VSK Software sysROM BIOS v1.0.0", 10
+  db 132, "VSK Software sysROM BIOS v2.1.0", 10
   db      "VSK-32 Proprietary ROM BIOS", 10
 
   db 0

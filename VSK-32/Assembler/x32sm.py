@@ -436,8 +436,13 @@ def resolve_value_operand(tok, line_no, line_text):
     raise AsmError(f"Unrecognized operand: '{tok}'", line_no, line_text)
 
 
-DIRECTIVES = {"db", "dw", "dd", "region", "origin"}
+DIRECTIVES = {"db", "dw", "dd", "region", "origin", "zerofill"}
 DIRECTIVE_WIDTH = {"db": 1, "dw": 2, "dd": 4}
+
+# `global <name>` is handled separately from DIRECTIVES: it never emits
+# bytes, moves the cursor, or attaches to a label the way db/region/origin
+# do, and it has its own file-position rule (must appear before any other
+# content) enforced directly in assemble()'s main loop.
 
 
 def assemble_directive_line(ln):
@@ -471,6 +476,25 @@ def assemble_directive_line(ln):
                 n, raw,
             )
         return OriginMarker(val[1], line_no=n, line_text=raw)
+
+    if mnem == "zerofill":
+        if len(ops) != 1:
+            raise AsmError(f"'zerofill' expects 1 operand, got {len(ops)}", n, raw)
+        val = resolve_value_operand(ops[0], n, raw)
+        if val[0] != "imm":
+            raise AsmError(
+                "'zerofill' requires an immediate/hex byte count (no labels or registers)",
+                n, raw,
+            )
+        count = val[1]
+        if count < 0:
+            raise AsmError(f"'zerofill' count cannot be negative, got {count}", n, raw)
+        # `zerofill N` is exactly `db 0, 0, ..., 0` (N times) -- reuses the
+        # same DataItem/DataField machinery as db/dw/dd, so address
+        # tracking, the listing, and pass-2 resolution need no special
+        # cases for it. count=0 is allowed and simply emits nothing.
+        fields = [DataField(1, value=0) for _ in range(count)]
+        return DataItem(fields, line_no=n, line_text=raw)
 
     # db / dw / dd
     width = DIRECTIVE_WIDTH[mnem]
@@ -826,12 +850,14 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
     this file's own labels are collected, so:
       - Referencing an extern (e.g. `call sys_readfile` where sys_readfile
         was exported by ext_boot.asm) resolves exactly like a local label.
-      - A LOCAL label with the same name always wins and is NOT an error --
-        shadowing an extern is allowed, since you may legitimately want a
-        local helper with the same short name as an imported one.
-      - Colliding with an extern by defining a same-named local label does
-        NOT raise "Duplicate label", only two local defs of the same name
-        does. Externs are not "already defined" for that check.
+      - Defining a LOCAL label with the same name as an extern is a hard
+        error ("Label 'x' collides with a label of the same name imported
+        from another file"), not silent shadowing -- this applies no
+        matter how that extern was exported (an explicit `global` line,
+        or a file that exports everything because it has no `global`
+        lines at all). Rename one of the two labels to fix it.
+      - Two LOCAL definitions of the same name in this one file is a
+        separate error ("Duplicate label").
 
     `collect_labels_only`, if True, skips the resolution pass entirely
     (which would otherwise raise "Undefined label" for any name this file
@@ -844,7 +870,37 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
     call per file with that pool passed as extern_labels. Regular single-
     file assembly should never need this -- leave it False.
 
-    Returns (code, listing, labels, base_addr) where:
+    `global <name>` marks one label as exported to other files during
+    cross-file linking (see image.py). Every `global` line must appear at
+    the top of the file, before any label definition or instruction/data
+    is emitted (origin/region lines without an attached label don't
+    count as "real content", so global lines can still follow them) --
+    a global line appearing later raises an error. A name given to
+    `global` that's never actually defined anywhere in the file is also
+    an error.
+
+    A file with AT LEAST ONE `global` line switches to opt-in mode: ONLY
+    the explicitly-named labels are exported, everything else becomes
+    private to that file (still fully usable internally -- calling your
+    own unexported helpers works exactly as before, they just aren't
+    importable elsewhere). A file with ZERO `global` lines exports EVERY
+    label IT ITSELF DEFINES, unchanged from how this worked before
+    `global` existed -- purely so existing sources keep assembling and
+    linking exactly as they did on an older x32sm.py, without needing to
+    be touched. You only get the new restricted behavior once a file
+    adds its first `global` line.
+
+    `autonoexport` (bare directive, no operands, same top-of-file rule as
+    `global`) is for NEW files that don't want the legacy compatibility
+    default: it overrides "zero `global` lines -> export everything" to
+    instead mean "zero `global` lines -> export nothing", without having
+    to add a `global` line for every single label just to opt out. Has
+    no effect (but isn't an error either) in a file that already has at
+    least one `global` line, since opt-in mode already exports nothing
+    beyond the explicitly-named list.
+
+    Returns (code, listing, labels, base_addr, exported_labels,
+    local_labels) where:
       - code is the assembled bytes, covering [base_addr, highest address
         written + its size). b"" if collect_labels_only.
       - listing is a list of (address, item, encoded_bytes) for -l output,
@@ -852,9 +908,17 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
       - base_addr is the lowest address anything was written to (equal to
         `org` unless a `region`/`origin` directive moved below it). 0 if
         collect_labels_only and nothing was ever written.
-      - labels is the FULL label table (locals + any unshadowed externs),
-        suitable for passing to --export-symbols so a third file can link
-        against this one too.
+      - labels is the FULL label table (locals + any unshadowed externs).
+      - exported_labels is what a multi-file build tool should use to
+        build the extern pool passed to other files' `extern_labels` --
+        either every label (no `global` lines) or just the `global`-
+        marked subset (one or more `global` lines), per the rule above.
+      - local_labels is only what THIS file itself defines, excluding
+        any passthrough externs it imported but never shadowed -- use
+        this (not `labels`) when merging many files' labels into one
+        combined debug symbol table, since `labels` would otherwise
+        duplicate every cross-file extern once per file that imported
+        it.
     """
     lines = preprocess(text)
 
@@ -866,8 +930,11 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
     # relative to where the code will actually be loaded in memory.
     items = []            # list of (addr, item) where item is Instr or DataItem
     labels = {}           # name -> address
-    extern_names = set()  # tracks which entries in `labels` are externs (for
-                           # the "local always wins, no duplicate error" rule)
+    extern_names = set()  # tracks which entries in `labels` came from
+                           # extern_labels (imports) -- used both to
+                           # reject any local redefinition of an extern
+                           # name (see define_label) and to compute
+                           # local_labels (below) by exclusion
     if extern_labels:
         for name, addr_val in extern_labels.items():
             labels[name] = addr_val
@@ -876,24 +943,93 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
     addr = org + origin_offset
     seen_any_addr_setting_item = False  # tracks whether origin can still
                                          # retroactively bias the start cursor
+    seen_any_real_content = False       # tracks whether we're still in the
+                                         # "top of file" zone where `global`
+                                         # and `autonoexport` lines are
+                                         # allowed (origin lines don't count
+                                         # as real content, so they can
+                                         # still come after them)
+    global_names = []     # names requested via `global <name>`, in order,
+                           # for the "must be defined somewhere" check below
+    autonoexport = False  # set by a bare `autonoexport` line -- overrides
+                           # the "no global lines -> export everything"
+                           # legacy-compat default to "no global lines ->
+                           # export nothing" instead
 
     def define_label(lbl, at_addr, ln):
-        # Shadowing an extern is fine (local always wins, silently); only
-        # two LOCAL definitions of the same name is a real duplicate-label
-        # error. Once shadowed, the name is no longer tracked as extern --
-        # this file's own definition is authoritative from here on.
-        if lbl in labels and lbl not in extern_names:
+        # A label name can only be defined ONCE, period -- whether the
+        # collision is with another local definition in this same file,
+        # or with a name imported as an extern from another file (via
+        # extern_labels, regardless of whether that name came from an
+        # explicit `global` line or from a file that exports everything
+        # by having no `global` lines at all). Shadowing an extern used
+        # to be silently allowed (local definitions "won"); that's now a
+        # hard error instead, since it was a real way to lose access to
+        # the intended cross-file label without any warning.
+        if lbl in extern_names:
+            raise AsmError(
+                f"Label '{lbl}' collides with a label of the same name "
+                f"imported from another file -- rename one of them",
+                ln.no, ln.raw,
+            )
+        if lbl in labels:
             raise AsmError(f"Duplicate label '{lbl}'", ln.no, ln.raw)
-        extern_names.discard(lbl)
         labels[lbl] = at_addr
 
     for ln in lines:
+        if ln.mnem == "global":
+            if seen_any_real_content:
+                raise AsmError(
+                    "'global' directives must appear at the top of the "
+                    "file, before any labels or instructions",
+                    ln.no, ln.raw,
+                )
+            if ln.label:
+                raise AsmError(
+                    "'global' cannot itself have a label attached", ln.no, ln.raw
+                )
+            if len(ln.operands) != 1:
+                raise AsmError(
+                    f"'global' expects exactly 1 operand (a label name), "
+                    f"got {len(ln.operands)}", ln.no, ln.raw,
+                )
+            name = ln.operands[0]
+            if not re.match(r"^[A-Za-z_.$][A-Za-z0-9_.$]*$", name):
+                raise AsmError(
+                    f"'global' operand '{name}' isn't a valid label name",
+                    ln.no, ln.raw,
+                )
+            global_names.append((name, ln))
+            continue
+
+        if ln.mnem == "autonoexport":
+            if seen_any_real_content:
+                raise AsmError(
+                    "'autonoexport' must appear at the top of the file, "
+                    "before any labels or instructions",
+                    ln.no, ln.raw,
+                )
+            if ln.label:
+                raise AsmError(
+                    "'autonoexport' cannot itself have a label attached",
+                    ln.no, ln.raw,
+                )
+            if ln.operands:
+                raise AsmError(
+                    f"'autonoexport' takes no operands, got {len(ln.operands)}",
+                    ln.no, ln.raw,
+                )
+            autonoexport = True
+            continue
+
         if ln.mnem == "__end__":
             for lbl in ln.label:
                 define_label(lbl, addr, ln)
             continue
 
         if ln.mnem == "origin":
+            if ln.label:
+                seen_any_real_content = True
             for lbl in ln.label:
                 define_label(lbl, addr, ln)
 
@@ -913,6 +1049,8 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
             # the CURRENT address -- region only affects what comes AFTER
             # it, never labels sitting above it. Resolve those first, then
             # move the cursor.
+            if ln.label:
+                seen_any_real_content = True
             for lbl in ln.label:
                 define_label(lbl, addr, ln)
 
@@ -922,6 +1060,7 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
             continue
 
         seen_any_addr_setting_item = True
+        seen_any_real_content = True
         for lbl in ln.label:
             define_label(lbl, addr, ln)
 
@@ -935,8 +1074,57 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
                 items.append((addr, ins))
                 addr += INSTR_SIZE
 
+    # local_labels = everything actually DEFINED in this file, excluding
+    # any extern that was imported but never locally shadowed. Needed
+    # separately from `labels` (which also contains those passthrough
+    # externs) for callers building a debug symbol table across many
+    # files: merging each file's full `labels` would duplicate every
+    # cross-file extern once per file that imported it, since assemble()
+    # seeds externs straight into `labels` before local defs are
+    # collected. `extern_names` tracks exactly which entries in `labels`
+    # are still passthrough externs (shadowing removes a name from it),
+    # so everything else is genuinely local.
+    local_labels = {name: addr for name, addr in labels.items()
+                     if name not in extern_names}
+
+    # Every `global <name>` must refer to a label that's actually defined
+    # somewhere in this file (checked against the FULL label table, which
+    # includes externs -- but re-exporting an imported extern under
+    # `global` is nonsensical bookkeeping, not a real error, so this only
+    # requires the name to resolve to *something*; if that's ever worth
+    # tightening to "must be a genuinely local definition" it can be, but
+    # for now "defined or imported" both count as "exists").
+    for name, gln in global_names:
+        if name not in labels:
+            raise AsmError(
+                f"'global {name}' refers to a label that's never defined "
+                f"in this file", gln.no, gln.raw,
+            )
+    if global_names:
+        # At least one `global` line -> opt-in mode: ONLY the named
+        # labels are exported, everything else becomes file-private.
+        # `autonoexport` is redundant here (opt-in mode already doesn't
+        # export anything beyond the named list) but harmless if present.
+        exported_labels = {name: labels[name] for name, _gln in global_names}
+    elif autonoexport:
+        # No `global` lines, but `autonoexport` opts OUT of the legacy
+        # export-everything default -- this file exports nothing at all.
+        exported_labels = {}
+    else:
+        # No `global` lines and no `autonoexport` -> export everything
+        # THIS FILE ITSELF DEFINES (local_labels), exactly like every
+        # file behaved before `global` existed. Deliberately NOT
+        # dict(labels): labels also contains every extern this file
+        # imported, and re-exporting those as if they were this file's
+        # own would let them flow back out to a THIRD file, or even
+        # back to the file that originally exported them, causing a
+        # spurious "collides with a label of the same name imported
+        # from another file" error against a name this file never
+        # actually defined.
+        exported_labels = dict(local_labels)
+
     if collect_labels_only:
-        return b"", [], labels, org
+        return b"", [], labels, org, exported_labels, local_labels
 
     # Pass 2: resolve label_ref -> concrete value(s)
     for a, item in items:
@@ -977,7 +1165,7 @@ def assemble(text, org=0, extern_labels=None, collect_labels_only=False):
         out[off:off + len(packed)] = packed
         listing.append((a, item, packed))
 
-    return bytes(out), listing, labels, base_addr
+    return bytes(out), listing, labels, base_addr, exported_labels, local_labels
 
 
 def format_listing(listing):
@@ -1072,9 +1260,11 @@ def main(argv=None):
     )
     parser.add_argument(
         "--export-symbols", default=None, metavar="FILE.symtab",
-        help="After assembling, write every resolved label (local + any "
-             "imported externs) to FILE.symtab, so another file can later "
-             "link against this one with --import-symbols."
+        help="After assembling, write the exported labels to FILE.symtab "
+             "(every label, if this file has no 'global' lines; only the "
+             "'global'-marked ones, if it has at least one -- see the "
+             "module docstring), so another file can later link against "
+             "this one with --import-symbols."
     )
     parser.add_argument(
         "--import-symbols", default=None, metavar="A.symtab[,B.symtab,...]",
@@ -1082,9 +1272,11 @@ def main(argv=None):
              "--export-symbols run) whose labels are made available to "
              "this file as externs -- e.g. kernel.asm can 'call "
              "sys_readfile' where sys_readfile was defined and exported "
-             "by ext_boot.asm. A local label of the same name always "
-             "shadows an imported one. If multiple files define the same "
-             "name, the last one listed wins."
+             "by ext_boot.asm. Defining a LOCAL label with the same name "
+             "as an imported one is a hard error, not silent shadowing. "
+             "If multiple imported files define the same name, the last "
+             "one listed wins (that collision is between the imports "
+             "themselves, not against a local definition)."
     )
     args = parser.parse_args(argv)
 
@@ -1097,8 +1289,8 @@ def main(argv=None):
         extern_labels = load_extern_labels(paths)
 
     try:
-        code, listing, labels, base_addr = assemble(text, org=args.org,
-                                                      extern_labels=extern_labels)
+        code, listing, labels, base_addr, exported_labels, local_labels = assemble(
+            text, org=args.org, extern_labels=extern_labels)
     except AsmError as e:
         print(f"Assembly failed: {e}", file=sys.stderr)
         return 1
@@ -1110,8 +1302,8 @@ def main(argv=None):
     print(f"Assembled {len(listing)} item(s), {len(code)} bytes -> {out_path}")
 
     if args.export_symbols:
-        write_symtab(args.export_symbols, labels)
-        print(f"Exported {len(labels)} symbol(s) -> {args.export_symbols}")
+        write_symtab(args.export_symbols, exported_labels)
+        print(f"Exported {len(exported_labels)} symbol(s) -> {args.export_symbols}")
     if base_addr != args.org:
         print(
             f"NOTE: a 'region' directive moved below --org; load this file "

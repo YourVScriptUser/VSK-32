@@ -1,5 +1,6 @@
 # vsk32env.py
 from Emu.System import Vars
+import os
 
 """
 A simple command-line that edits VM state
@@ -121,5 +122,49 @@ elif command == "UpdateBIOS":
     print(f"Loaded '{src_path}': {data_size} bytes @ offset {offset} into '{disk_path}'")
     sys.exit(0)  
     
+elif command == "RunIMG":
+    if len(sys.argv) < 3:
+        print("Usage: LoadDiskImage <path-to-bin> [offset]")
+        sys.exit(1)
+
+    src_path = sys.argv[2]
+    offset   = int(sys.argv[3], 0) if len(sys.argv) > 3 else 0  # base 0 lets you pass hex like 0x1000
+
+    disk_path = Vars.DISK_PATH_RELATIVE
+
+    if not os.path.isfile(src_path):
+        print(f"Source file not found: {src_path}")
+        sys.exit(1)
+
+    if not os.path.isfile(disk_path):
+        print(f"Disk image not found: {disk_path} (run WriteVMDisk first)")
+        sys.exit(1)
+
+    disk_size = os.path.getsize(disk_path)
+    data_size = os.path.getsize(src_path)
+
+    if offset < 0:
+        print(f"Offset must be non-negative, got {offset}")
+        sys.exit(1)
+
+    if offset + data_size > disk_size:
+        print(
+            f"'{src_path}' ({data_size} bytes) doesn't fit in disk at "
+            f"offset {offset}: would end at byte {offset + data_size}, "
+            f"disk is {disk_size} bytes"
+        )
+        sys.exit(1)
+
+    with open(src_path, "rb") as f:
+        data = f.read()
+
+    with open(disk_path, "r+b") as f:
+        f.seek(offset)
+        f.write(data)
+
+    print(f"Loaded '{src_path}': {data_size} bytes @ offset {offset} into '{disk_path}'")
+    os.chdir(os.path.abspath("Emulator.py").strip("/Emulator.py")) # HACK
+    import Emulator
+    
 else:
-    print("Invalid command. Valid commands are: WriteBIOS, WriteVMDisk, LoadDiskImage, UpdateBIOS, WriteMEMDump")
+    print("Invalid command. Valid commands are: WriteBIOS, WriteVMDisk, LoadDiskImage, UpdateBIOS, WriteMEMDump, RunIMG")
