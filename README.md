@@ -1,5 +1,9 @@
 33 Opcodes, BIOS, 24 32-bit registers, byte-addressed, 256-dword PMIO, 256MiB RAM, 512MiB 1024B/sector disk
 
+<img width="273" height="75" alt="image" src="https://github.com/user-attachments/assets/0f046ddd-f35a-40aa-89c1-87bc87cf66c9" />
+<img width="832" height="198" alt="image" src="https://github.com/user-attachments/assets/72eb771b-7ce9-487b-bf80-316330c42697" />
+
+
 Requires python >3.12 (Built on 3.14.3)
 
 Emulator.py: Main emulator runtime
