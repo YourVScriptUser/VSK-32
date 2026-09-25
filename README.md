@@ -28,7 +28,22 @@ Created 'Memory Dump/dump.bin'
 
 Now, run the emulator:
 
-`py Emulator.py`
+`py Emulator.py --legacyvideo true`
+you can also launch with legacy video as false to use the dearGUI video GUI - it works but is still in beta
+
+Also contains a `add_to_path.py` file that adds `com/` to path and adds the following commands:
+  -> vsk32:      Emulator.py (new commands added - see below)
+  -> vsk32env:   vsk32env.py
+  -> asm-x32:    Assembler/x32sm.py
+  -> ssfsimage:  Assembler/image.py
+
+vsk32 commands:
+  -> --image <path>:           boot from this image
+  -> --legacyvideo <state>:    use legacy (console out) video instead of the DearGUI one
+  -> --norun <state>:          toggle on/off running the emulator once command parsing is done
+  -> --videofont <path>:       path to .ttf path for the DearGUI video
+  -> --setdefaultfont <path>:  set this font file as the default font
+  -> --dbg <state>:            toggle on/off the GUI debugger (displays registers and a  live memory/stack dump)
 
 Expected output:
 
@@ -45,6 +60,6 @@ Reading boot sector... fail
 Boot Failed: Not a bootable disk.
 ```
 
-Then press `ctrl+c` to shut down the emulator
+Then press `ctrl+c` in the console to shut down the emulator
 
 For OSes, see VS-OS and Quasix.
