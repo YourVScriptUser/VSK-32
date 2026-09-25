@@ -4,12 +4,11 @@
 from Emu.System import System
 from Emu.System import SuperIO
 from Emu.System import Display
+from Emu.System import NewDisplay
 # System.py checks for Windows 
 
 # Early initialization
- 
 EmuConsoleColors = System.Teknikality.colors
-
 System.Teknikality.hide_cursor() # Hide the console cursor.
 
  
@@ -157,7 +156,8 @@ def Shutdown():
       
       print(f"Memory dump available at: '{System.Vars.DUMP_PATH_RELATIVE}'")       
     
-    GUI.stop()
+    if GUI:
+      GUI.stop()
     InterruptHandler._threadExit = True
     InterruptHandler.thread.join()
     VMDisplay.threadExit = True
@@ -186,7 +186,7 @@ def Shutdown():
  
  
  
- 
+
 class cpu32:
     """The main CPU object"""
     class stack:
@@ -745,38 +745,165 @@ class cpu32:
             Registers.flags["HI"] = 0
             Registers.flags["LO"] = 0
             # Dont touch IF - comparison flags only.
-           
-         
 
-EmuConsole("Allocating emulator memory...")
-Memory = System.memory()
-EmuConsole(f"Emulator memory allocated: {len(Memory.Memory)}B") 
- 
-EmuConsole("Allocating virtual registers...")
-Registers = System.registers()
-EmuConsole(f"Virtual registers allocated: {' '.join([System.format_hex_32(r) for r in Registers.regs32.arr])}")
+
+def InitEmuObj(video_mode="new", font_path=None, launch_debug=False):
+  """Returns a tuple of emulator objects: `Memory, Registers, PortIO, InterruptHandler, NonInterruptDevicesHandler, GUI, VMDisplay, VMDisplayThread`"""  
   
-EmuConsole("Allocating virtual ports...")
-PortIO = SuperIO.portio()
-EmuConsole("Allocated virtual ports")
+  EmuConsole("Allocating emulator memory...")
+  Memory = System.memory()
+  EmuConsole(f"Emulator memory allocated: {len(Memory.Memory)}B") 
+   
+  EmuConsole("Allocating virtual registers...")
+  Registers = System.registers()
+  EmuConsole(f"Virtual registers allocated: {' '.join([System.format_hex_32(r) for r in Registers.regs32.arr])}")
+    
+  EmuConsole("Allocating virtual ports...")
+  PortIO = SuperIO.portio()
+  EmuConsole("Allocated virtual ports")
+  
+  EmuConsole("Setting up interrupting devices polling thread...")
+  Registers.flags["IF"] = 0
+  InterruptHandler = SuperIO.InterruptHandler(PortIO)
+  InterruptHandler.InterruptThread()
+  
+  EmuConsole("Setting up virtual non-interrupting devices...")
+  NonInterruptDevicesHandler = SuperIO.NonInterruptThreadDevices(memory=Memory, ports=PortIO)
+  
+  GUI = None
+  if launch_debug:
+    EmuConsole("Starting GUI...")
+    GUI = System.start_gui(regs=Registers, mem=Memory, cpu=cpu32)  
+  
+  EmuConsole(f"Starting virtual display device (mode={video_mode})...")
+  VMDisplay = Display.Display(mem=Memory, ports=PortIO) if video_mode == "legacy" else NewDisplay.GuiDisplay(window_title=f"VSK-32 Virtual Display (font=`{font_path}`)", mem=Memory, ports=PortIO, font_path=font_path)
+  VMDisplayThread = VMDisplay.spawn_refresh_thread()
+  VMDisplayThread.start()
+  
+  EmuConsole("Main objects initialized")
+  return Memory, Registers, PortIO, InterruptHandler, NonInterruptDevicesHandler, GUI, VMDisplay, VMDisplayThread
+ 
+def load_disk_image(src_path):  
+  disk_path = System.Vars.DISK_PATH_RELATIVE  
+  
+  if not System.os.path.isfile(src_path):
+      print(f"Source file not found: {src_path}")
+      System.sys.exit(1)  
+      
+  if not System.os.path.isfile(disk_path):
+      print(f"'{System.Vars.DISK_PATH_RELATIVE}' Not found!")
+      System.sys.exit(1)  
+      
+  disk_size = System.os.path.getsize(disk_path)
+  data_size = System.os.path.getsize(src_path) 
+  print(f"Source file is {data_size} bytes, {data_size//1024} sectors")
+  
+  with open(src_path, "rb") as f:
+      data = f.read()  
+      
+  with open(disk_path, "r+b") as f:
+      f.write(data)
+     
+  print(f"Loaded {data_size} bytes from '{src_path}' into '{System.Vars.DISK_PATH_RELATIVE}'")      
 
-EmuConsole("Setting up interrupting devices polling thread...")
-Registers.flags["IF"] = 0
-InterruptHandler = SuperIO.InterruptHandler(PortIO)
-InterruptHandler.InterruptThread()
+def copy_file_bytes(source, destination):
+    with open(source, "rb") as src:
+        data = src.read()
 
-EmuConsole("Setting up virtual non-interrupting devices...")
-NonInterruptDevicesHandler = SuperIO.NonInterruptThreadDevices(memory=Memory, ports=PortIO)
-EmuConsole("Starting GUI...")
-GUI =     System.start_gui(regs=Registers, mem=Memory, cpu=cpu32)  
+    with open(destination, "wb") as dst:
+        dst.write(data)
+ 
+def parse_args(argslist: list, known_keywords: list) -> dict:
+    known_args = known_keywords
+    args_found = {}
+    _skiparg   = True # This method to skip indexes is jank but it works
+    for arg in argslist:
+        if _skiparg:
+            _skiparg = False
+            continue
+        
+        if arg not in known_args:
+            print("Error during argument parsing: unknown argument")   
+            return "error"
+        
+        if argslist.index(arg) == len(argslist)-1:
+            print("Error during argument parsing: unspecified keyword argument")
+            return "error"
+        
+        args_found[arg] = argslist[argslist.index(arg) + 1]
+        _skiparg = True
+        
+    return args_found
+           
+if __name__ == "__main__": 
+  LEGACY_VIDEO = False
+  FONT_PATH    = System.Vars.FONT_PATH_RELATIVE
+  RUN          = True
+  ARGS         = ["--legacyvideo", "--image", "--videofont", "--setdefaultfont", "--norun", "--dbg"]
+  DEBUG_GUI    = False
+  
+  args = parse_args(System.sys.argv, ARGS)
+  if args == "error":
+    print("Invalid emulator launch arguments, use vsk32env.py for extra commands (WriteBIOS, WriteVMDisk, LoadDiskImage, UpdateBIOS, WriteMEMDump)")
+    print(f"Known keywords: {', '.join(ARGS)}")
+    System.sys.exit(1)
+    
+  # Case 1: Video mode
+  if "--legacyvideo" in args.keys():  
+      if args["--legacyvideo"] == "true":
+        LEGACY_VIDEO = True
+        
+      elif args["--legacyvideo"] == "false":
+        LEGACY_VIDEO = False
+        
+      else:
+        print("Invalid video mode!")
+        System.sys.exit(1)
+     
+  # Case 2: Load a disk image
+  if "--image" in args.keys():
+      file = args["--image"]
+      System.time.sleep(0.5)
+      load_disk_image(file)
+      
+  # Case 3: Font path selected
+  if "--videofont" in args.keys():
+      FONT_PATH = args["--videofont"]
+      
+  # Case 4: Overwrite current video font
+  if "--setdefaultfont" in args.keys():
+      if not System.os.path.exists(args["--setdefaultfont"]):
+          print(f"Font file not found!")
+          System.sys.exit(1)
+          
+      copy_file_bytes(source=args["--setdefaultfont"], destination=System.Vars.FONT_PATH_RELATIVE)
+  
+  # Case 5: Don't run the emulator
+  if "--norun" in args.keys():
+      if args["--norun"] == "true":
+        RUN = False
+ 
+      if args["--norun"] == "false":
+        RUN = True
+        
+  # Case 6: Launch debug GUI
+  if "--dbg" in args.keys():
+      if args["--dbg"] == "false":
+        DEBUG_GUI = False
+ 
+      if args["--dbg"] == "true":
+        DEBUG_GUI = True      
+      
+  # Now run the emulator (if RUN)
+  if RUN:
+    Memory, Registers, PortIO, InterruptHandler, NonInterruptDevicesHandler, GUI, VMDisplay, VMDisplayThread = InitEmuObj("new" if LEGACY_VIDEO == False else "legacy", FONT_PATH, launch_debug=DEBUG_GUI)
+    EmuRun()
+      
+      
+ 
+  
 
-EmuConsole("Starting virtual display device...")
-VMDisplay = Display.Display(mem=Memory, ports=PortIO)
-VMDisplayThread = VMDisplay.spawn_refresh_thread()
-VMDisplayThread.start()
-
-EmuConsole("Main objects initialized")
-EmuRun()
+    
  
 
  

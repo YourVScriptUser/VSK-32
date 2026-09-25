@@ -336,8 +336,8 @@ interrupts.disk_write:
 interrupts.clear_kbuf:
   call keyboard.clear
   iret
-  
 
+; =======================================================================================
 
 ; BIOS MAIN
 
